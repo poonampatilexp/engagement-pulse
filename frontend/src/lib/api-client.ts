@@ -1,4 +1,5 @@
-import { LoginCredentials, LoginResponse, UserProfile } from '@/types/auth';
+import { LoginCredentials, LoginResponse, UserProfile, OrganisationRef } from '@/types/auth';
+import { Project, Risk, UpdateRiskPayload } from '@/types/project';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -199,6 +200,37 @@ export const apiClient = {
       } finally {
         setAccessToken(null);
       }
+    },
+  },
+
+  organisations: {
+    async list(): Promise<OrganisationRef[]> {
+      return request<OrganisationRef[]>('/api/organisations/', {
+        method: 'GET',
+      });
+    },
+  },
+
+  projects: {
+    async list(organisationId: number): Promise<Project[]> {
+      return request<Project[]>(`/api/organisations/${organisationId}/projects/`, {
+        method: 'GET',
+      });
+    },
+  },
+
+  risks: {
+    async list(projectId: number): Promise<Risk[]> {
+      return request<Risk[]>(`/api/projects/${projectId}/risks/`, {
+        method: 'GET',
+      });
+    },
+
+    async update(riskId: number, data: UpdateRiskPayload): Promise<Risk> {
+      return request<Risk>(`/api/risks/${riskId}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
     },
   },
 };

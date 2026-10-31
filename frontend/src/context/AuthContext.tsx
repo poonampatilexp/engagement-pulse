@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { UserProfile, LoginResponse } from '@/types/auth';
+import { UserProfile, LoginResponse, OrganisationRef } from '@/types/auth';
 import { apiClient } from '@/lib/api-client';
 
 interface AuthContextType {
@@ -11,6 +11,9 @@ interface AuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  selectedOrganisation: OrganisationRef | null;
+  setSelectedOrganisation: (org: OrganisationRef) => void;
+  availableOrganisations: OrganisationRef[];
   login: (data: LoginResponse) => void;
   logout: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
@@ -26,6 +29,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedOrganisation, setSelectedOrganisation] = useState<OrganisationRef | null>(null);
+
+  const availableOrganisations: OrganisationRef[] = useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'client_viewer') {
+      return user.organisation ? [user.organisation] : [];
+    }
+    return user.organisations || [];
+  }, [user]);
+
+  // Sync selectedOrganisation when availableOrganisations change
+  useEffect(() => {
+    if (availableOrganisations.length > 0) {
+      setSelectedOrganisation((prev) => {
+        if (prev && availableOrganisations.some((org) => org.id === prev.id)) {
+          return prev;
+        }
+        return availableOrganisations[0];
+      });
+    } else {
+      setSelectedOrganisation(null);
+    }
+  }, [availableOrganisations]);
 
   const login = useCallback((data: LoginResponse) => {
     setAccessToken(data.access);
@@ -41,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setAccessToken(null);
       setUser(null);
+      setSelectedOrganisation(null);
       apiClient.setAccessToken(null);
       // Completely wipe TanStack React Query cache to prevent data leakage
       queryClient.clear();
@@ -60,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setAccessToken(null);
       setUser(null);
+      setSelectedOrganisation(null);
       apiClient.setAccessToken(null);
       return false;
     }
@@ -79,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isMounted) {
         setAccessToken(null);
         setUser(null);
+        setSelectedOrganisation(null);
         apiClient.setAccessToken(null);
         queryClient.clear();
         router.replace('/login');
@@ -100,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setAccessToken(null);
           setUser(null);
+          setSelectedOrganisation(null);
           apiClient.setAccessToken(null);
         }
       } finally {
@@ -125,6 +155,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accessToken,
         isAuthenticated: !!accessToken && !!user,
         isLoading,
+        selectedOrganisation,
+        setSelectedOrganisation,
+        availableOrganisations,
         login,
         logout,
         refreshSession,

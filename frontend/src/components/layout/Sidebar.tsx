@@ -21,6 +21,7 @@ import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
 import ChevronLeftRoundedIcon from '@mui/icons-material/ChevronLeftRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import { useAuth } from '@/context/AuthContext';
 import PulseIcon from '@mui/icons-material/TimelineRounded';
 
 interface SidebarProps {
@@ -46,6 +47,9 @@ export default function Sidebar({
   mobileOpen,
   onMobileClose,
 }: SidebarProps) {
+  const { selectedOrganisation } = useAuth();
+  const orgName = selectedOrganisation?.name || 'Assigned Organisation';
+
   const drawerContent = (
     <Box
       sx={{
@@ -118,7 +122,7 @@ export default function Sidebar({
               ACTIVE ORGANISATION
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 700, color: '#0F172A', mt: 0.25 }}>
-              Acme Corp
+              {orgName}
             </Typography>
           </Box>
         </Box>

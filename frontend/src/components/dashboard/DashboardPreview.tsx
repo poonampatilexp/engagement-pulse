@@ -1,475 +1,610 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
   Grid,
   Card,
   CardContent,
-  Button,
-  Chip,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  LinearProgress,
+  Paper,
+  Chip,
   IconButton,
   Tooltip,
+  Drawer,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Button,
+  CircularProgress,
+  Alert,
+  Divider,
 } from '@mui/material';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import AssessmentRoundedIcon from '@mui/icons-material/AssessmentRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
-import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
-import SpeedRoundedIcon from '@mui/icons-material/SpeedRounded';
-import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
+import EditRoundedIcon from '@mui/icons-material/EditRounded';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/context/AuthContext';
+import { apiClient } from '@/lib/api-client';
+import { Project, Risk, RiskSeverity, RiskStatus, UpdateRiskPayload } from '@/types/project';
 
-interface StatItem {
-  title: string;
-  value: string;
-  unit?: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  iconBg: string;
-}
-
-const STAT_CARDS: StatItem[] = [
-  {
-    title: 'Active Projects',
-    value: '2',
-    subtitle: '2 active in Acme Corp',
-    icon: <AssessmentRoundedIcon fontSize="small" sx={{ color: '#E94C17' }} />,
-    iconBg: '#FFF3EE',
-  },
-  {
-    title: 'Identified Risks',
-    value: '4',
-    subtitle: '1 open • 2 mitigating',
-    icon: <WarningAmberRoundedIcon fontSize="small" sx={{ color: '#D97706' }} />,
-    iconBg: '#FEF3C7',
-  },
-  {
-    title: 'Project Risk Score',
-    value: '13',
-    unit: '/ 100',
-    subtitle: 'Peak: ERP Modernisation',
-    icon: <SpeedRoundedIcon fontSize="small" sx={{ color: '#EA580C' }} />,
-    iconBg: '#FFEDD5',
-  },
-  {
-    title: 'Resolved Risks',
-    value: '1',
-    subtitle: '1 risk mitigated & closed',
-    icon: <CheckCircleOutlineRoundedIcon fontSize="small" sx={{ color: '#059669' }} />,
-    iconBg: '#D1FAE5',
-  },
-];
-
-const RECENT_PROJECTS = [
-  {
-    id: 1,
-    name: 'ERP Modernisation',
-    risksCount: 2,
-    score: 13,
-    status: 'In Progress',
-    updated: '10 mins ago',
-  },
-  {
-    id: 2,
-    name: 'Acme Core Platform',
-    risksCount: 2,
-    score: 4,
-    status: 'Healthy',
-    updated: '1 hour ago',
-  },
-];
-
-const RECENT_RISKS = [
-  {
-    id: 101,
-    project: 'ERP Modernisation',
-    title: 'Legacy Database Migration Delay',
-    severity: 'high',
-    status: 'open',
-    contribution: 9, // 3 x 3
-    owner: 'Data Engineering Lead',
-  },
-  {
-    id: 102,
-    project: 'ERP Modernisation',
-    title: 'Third-party API Rate Limiting',
-    severity: 'medium',
-    status: 'mitigating',
-    contribution: 4, // 2 x 2
-    owner: 'Integration Team',
-  },
-  {
-    id: 103,
-    project: 'Acme Core Platform',
-    title: 'CI/CD Deployment Bottlenecks',
-    severity: 'medium',
-    status: 'mitigating',
-    contribution: 4, // 2 x 2
-    owner: 'DevOps Lead',
-  },
-  {
-    id: 104,
-    project: 'Acme Core Platform',
-    title: 'SSL Certificate Auto-Renewal',
-    severity: 'low',
-    status: 'closed',
-    contribution: 0, // 1 x 0
-    owner: 'Security Specialist',
-  },
-];
-
-function getSeverityChip(severity: string) {
+function getSeverityChip(severity: RiskSeverity) {
   switch (severity) {
     case 'critical':
-      return <Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#B91C1C', fontWeight: 700 }} />;
+      return <Chip label="CRITICAL" size="small" sx={{ bgcolor: '#FEE2E2', color: '#B91C1C', fontWeight: 700, fontSize: '0.7rem' }} />;
     case 'high':
-      return <Chip label="HIGH" size="small" sx={{ bgcolor: '#FFEDD5', color: '#C2410C', fontWeight: 700 }} />;
+      return <Chip label="HIGH" size="small" sx={{ bgcolor: '#FFEDD5', color: '#C2410C', fontWeight: 700, fontSize: '0.7rem' }} />;
     case 'medium':
-      return <Chip label="MEDIUM" size="small" sx={{ bgcolor: '#FEF3C7', color: '#B45309', fontWeight: 700 }} />;
+      return <Chip label="MEDIUM" size="small" sx={{ bgcolor: '#FEF3C7', color: '#B45309', fontWeight: 700, fontSize: '0.7rem' }} />;
     default:
-      return <Chip label="LOW" size="small" sx={{ bgcolor: '#E0F2FE', color: '#0369A1', fontWeight: 700 }} />;
+      return <Chip label="LOW" size="small" sx={{ bgcolor: '#E0F2FE', color: '#0369A1', fontWeight: 700, fontSize: '0.7rem' }} />;
   }
 }
 
-function getStatusChip(status: string) {
+function getStatusChip(status: RiskStatus) {
   switch (status) {
     case 'open':
-      return <Chip label="Open" size="small" variant="outlined" color="error" sx={{ fontWeight: 600 }} />;
+      return <Chip label="Open" size="small" variant="outlined" color="error" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />;
     case 'mitigating':
-      return <Chip label="Mitigating" size="small" variant="outlined" color="warning" sx={{ fontWeight: 600 }} />;
+      return <Chip label="Mitigating" size="small" variant="outlined" color="warning" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />;
     default:
-      return <Chip label="Closed" size="small" variant="outlined" color="success" sx={{ fontWeight: 600 }} />;
+      return <Chip label="Closed" size="small" variant="outlined" color="success" sx={{ fontWeight: 600, fontSize: '0.72rem' }} />;
   }
 }
 
 export default function DashboardPreview() {
+  const { user, selectedOrganisation } = useAuth();
+  const queryClient = useQueryClient();
+  const isConsultant = user?.role === 'consultant';
+
+  const orgId = selectedOrganisation?.id;
+
+  // 1. Fetch projects for the active organisation
+  const {
+    data: projects = [],
+    isLoading: isLoadingProjects,
+    error: projectsError,
+  } = useQuery({
+    queryKey: ['projects', orgId],
+    queryFn: () => (orgId ? apiClient.projects.list(orgId) : Promise.resolve([])),
+    enabled: !!orgId,
+  });
+
+  // 2. Fetch risks for each project concurrently
+  const riskQueries = useQueries({
+    queries: projects.map((p) => ({
+      queryKey: ['risks', p.id],
+      queryFn: () => apiClient.risks.list(p.id),
+      enabled: !!p.id,
+    })),
+  });
+
+  const isLoadingRisks = riskQueries.some((q) => q.isLoading);
+
+  // Map project ID to its risk list
+  const projectRisksMap = useMemo(() => {
+    const map = new Map<number, Risk[]>();
+    projects.forEach((project, idx) => {
+      const risks = riskQueries[idx]?.data || [];
+      map.set(project.id, risks);
+    });
+    return map;
+  }, [projects, riskQueries]);
+
+  // Aggregate metrics
+  const totalProjectsCount = projects.length;
+
+  // Non-closed risks (open + mitigating)
+  const allOpenRisks = useMemo(() => {
+    const all: (Risk & { projectName?: string })[] = [];
+    projects.forEach((p) => {
+      const risks = projectRisksMap.get(p.id) || [];
+      risks
+        .filter((r) => r.status !== 'closed')
+        .forEach((r) => {
+          all.push({ ...r, projectName: p.name });
+        });
+    });
+    return all;
+  }, [projects, projectRisksMap]);
+
+  const totalOpenRisksCount = allOpenRisks.length;
+
+  // State for Risk Details Drawer
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTitle, setDrawerTitle] = useState('');
+  const [drawerRisks, setDrawerRisks] = useState<(Risk & { projectName?: string })[]>([]);
+
+  // State for Edit Risk Dialog (Consultants only)
+  const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
+  const [editFormData, setEditFormData] = useState<UpdateRiskPayload>({});
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Mutation to update risk
+  const updateRiskMutation = useMutation({
+    mutationFn: ({ riskId, data }: { riskId: number; data: UpdateRiskPayload }) =>
+      apiClient.risks.update(riskId, data),
+    onSuccess: (updatedRisk) => {
+      // Invalidate relevant queries so risk score and risk list recalculate
+      queryClient.invalidateQueries({ queryKey: ['risks', updatedRisk.project] });
+      queryClient.invalidateQueries({ queryKey: ['projects', orgId] });
+      setEditingRisk(null);
+      setEditError(null);
+    },
+    onError: (err: any) => {
+      setEditError(err.message || 'Failed to update risk.');
+    },
+  });
+
+  // Handle clicking "Open Risks" summary card -> show all non-closed risks for active organisation
+  const handleOpenAllRisks = () => {
+    setDrawerTitle(`Open Risks — ${selectedOrganisation?.name || 'Active Organisation'}`);
+    setDrawerRisks(allOpenRisks);
+    setDrawerOpen(true);
+  };
+
+  // Handle clicking a specific project's Open Risks Count -> show that project's non-closed risks
+  const handleOpenProjectRisks = (project: Project) => {
+    const risks = (projectRisksMap.get(project.id) || [])
+      .filter((r) => r.status !== 'closed')
+      .map((r) => ({ ...r, projectName: project.name }));
+    setDrawerTitle(`Open Risks — ${project.name}`);
+    setDrawerRisks(risks);
+    setDrawerOpen(true);
+  };
+
+  // Open Edit Dialog for Consultant
+  const handleStartEdit = (risk: Risk) => {
+    setEditingRisk(risk);
+    setEditFormData({
+      title: risk.title,
+      description: risk.description,
+      severity: risk.severity,
+      status: risk.status,
+      owner: risk.owner,
+    });
+    setEditError(null);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRisk) return;
+    updateRiskMutation.mutate({ riskId: editingRisk.id, data: editFormData });
+  };
+
+  // Keep drawer risks updated when queries change
+  React.useEffect(() => {
+    if (drawerOpen) {
+      // If drawer title contains project name, find that project
+      const matchedProject = projects.find((p) => drawerTitle.includes(p.name));
+      if (matchedProject) {
+        const risks = (projectRisksMap.get(matchedProject.id) || [])
+          .filter((r) => r.status !== 'closed')
+          .map((r) => ({ ...r, projectName: matchedProject.name }));
+        setDrawerRisks(risks);
+      } else {
+        setDrawerRisks(allOpenRisks);
+      }
+    }
+  }, [allOpenRisks, projectRisksMap, drawerOpen, projects, drawerTitle]);
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
-      {/* Hero Welcome & Action Bar */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', sm: 'row' },
-          justifyContent: 'space-between',
-          alignItems: { xs: 'flex-start', sm: 'center' },
-          gap: 2,
-        }}
-      >
+      {/* Active Tenant Context Bar */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-            <Typography variant="h2" sx={{ fontSize: { xs: '1.4rem', sm: '1.75rem' }, fontWeight: 700 }}>
-              Acme Corp
-            </Typography>
-            <Chip
-              label="Demo Preview"
-              size="small"
-              variant="outlined"
-              sx={{
-                bgcolor: '#F8FAFC',
-                color: '#64748B',
-                fontWeight: 600,
-                border: '1px solid #CBD5E1',
-              }}
-            />
-          </Box>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Multi-tenant project risk evaluation with automatic backend score calculation.
+          <Typography variant="h4" sx={{ fontWeight: 700, color: '#0F172A' }}>
+            {selectedOrganisation?.name || 'Organisation'} Overview
           </Typography>
-        </Box>
-
-        {/* Action Buttons (Disabled with upcoming tooltips) */}
-        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-          <Tooltip title="Asynchronous CSV import via Dramatiq & Redis will be active in Prompt 4" arrow>
-            <span>
-              <Button
-                variant="outlined"
-                startIcon={<UploadFileRoundedIcon />}
-                disabled
-                sx={{
-                  borderColor: '#E2E8F0 !important',
-                  color: '#94A3B8 !important',
-                }}
-              >
-                Import CSV (Upcoming)
-              </Button>
-            </span>
-          </Tooltip>
-
-          <Tooltip title="Project creation modal form will be wired in the project workflow prompt" arrow>
-            <span>
-              <Button
-                variant="contained"
-                startIcon={<AddRoundedIcon />}
-                disabled
-                sx={{
-                  bgcolor: '#E2E8F0 !important',
-                  color: '#94A3B8 !important',
-                }}
-              >
-                New Project (Upcoming)
-              </Button>
-            </span>
-          </Tooltip>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+            Active engagement risk status and project metrics
+          </Typography>
         </Box>
       </Box>
 
-      {/* Summary KPI Metric Cards (Strictly Equal Height & Baseline Aligned) */}
-      <Grid container spacing={2.5} alignItems="stretch">
-        {STAT_CARDS.map((stat, i) => (
-          <Grid item xs={12} sm={6} lg={3} key={i} sx={{ display: 'flex' }}>
-            <Card
-              sx={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                borderRadius: 3,
-                border: '1px solid #E2E8F0',
-                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
-                height: '100%',
-              }}
-            >
-              <CardContent
-                sx={{
-                  p: 2.5,
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  '&:last-child': { pb: 2.5 },
-                }}
-              >
-                {/* Top Row: Label & Icon */}
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontWeight: 700,
-                      color: '#64748B',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      fontSize: '0.72rem',
-                    }}
-                  >
-                    {stat.title}
+      {/* 1. Only Two Summary Cards: Total Projects & Open Risks */}
+      <Grid container spacing={3}>
+        {/* Card 1: Total Projects */}
+        <Grid item xs={12} sm={6}>
+          <Card
+            sx={{
+              borderRadius: 3,
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              transition: 'box-shadow 0.2s',
+              '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.06)' },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Total Projects
                   </Typography>
-                  <Box
-                    sx={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 2,
-                      backgroundColor: stat.iconBg,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {stat.icon}
-                  </Box>
-                </Box>
-
-                {/* Middle Row: Stat Value */}
-                <Box sx={{ my: 1, display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
-                  <Typography
-                    variant="h2"
-                    sx={{
-                      fontSize: '1.875rem',
-                      fontWeight: 700,
-                      color: '#0F172A',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {stat.value}
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: '#0F172A', mt: 1 }}>
+                    {isLoadingProjects ? <CircularProgress size={28} sx={{ color: 'primary.main' }} /> : totalProjectsCount}
                   </Typography>
-                  {stat.unit && (
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: '#64748B',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {stat.unit}
-                    </Typography>
-                  )}
+                  <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+                    Active projects in {selectedOrganisation?.name || 'organisation'}
+                  </Typography>
                 </Box>
-
-                {/* Bottom Row: Concise Context (Never Truncates) */}
-                <Typography
-                  variant="caption"
+                <Box
                   sx={{
-                    color: '#64748B',
-                    fontWeight: 500,
-                    display: 'block',
-                    mt: 0.5,
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2.5,
+                    bgcolor: '#FFF3EE',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'primary.main',
                   }}
                 >
-                  {stat.subtitle}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+                  <AssessmentRoundedIcon />
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
 
-      {/* Main Grid: Projects & Recent Risks (Equal Stretch) */}
-      <Grid container spacing={3} alignItems="stretch">
-        {/* Projects Overview */}
-        <Grid item xs={12} lg={5} sx={{ display: 'flex' }}>
+        {/* Card 2: Open Risks (Clickable to view non-closed risks) */}
+        <Grid item xs={12} sm={6}>
           <Card
+            onClick={handleOpenAllRisks}
+            data-testid="open-risks-card"
             sx={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
               borderRadius: 3,
               border: '1px solid #E2E8F0',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              '&:hover': {
+                boxShadow: '0 4px 14px rgba(233,76,23,0.12)',
+                borderColor: 'primary.light',
+                bgcolor: '#FFFAF8',
+              },
             }}
           >
-            <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h3">Organisation Projects</Typography>
-                <Button size="small" variant="text" disabled sx={{ color: '#94A3B8 !important' }}>
-                  View All
-                </Button>
+            <CardContent sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Open Risks
+                  </Typography>
+                  <Typography variant="h3" sx={{ fontWeight: 700, color: totalOpenRisksCount > 0 ? '#E94C17' : '#0F172A', mt: 1 }}>
+                    {isLoadingRisks ? <CircularProgress size={28} sx={{ color: 'primary.main' }} /> : totalOpenRisksCount}
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
+                    <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 600 }}>
+                      Open & mitigating risks • Click to view
+                    </Typography>
+                    <ArrowForwardRoundedIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                  </Box>
+                </Box>
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2.5,
+                    bgcolor: '#FEF3C7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#D97706',
+                  }}
+                >
+                  <WarningAmberRoundedIcon />
+                </Box>
               </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                {RECENT_PROJECTS.map((proj) => (
-                  <Box
-                    key={proj.id}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      border: '1px solid #E2E8F0',
-                      backgroundColor: '#FFFFFF',
-                      transition: 'border-color 0.2s',
-                      '&:hover': { borderColor: 'primary.light' },
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Box>
-                        <Typography variant="h4" sx={{ fontSize: '1rem' }}>
-                          {proj.name}
+      {/* 2. One Projects Table: Project Name, Risk Score, Open Risks Count */}
+      <Card
+        sx={{
+          borderRadius: 3,
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          overflow: 'hidden',
+        }}
+      >
+        <Box sx={{ p: 2.5, borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F172A' }}>
+            Projects
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {projects.length} {projects.length === 1 ? 'project' : 'projects'} tracked
+          </Typography>
+        </Box>
+
+        {isLoadingProjects ? (
+          <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
+            <CircularProgress size={32} sx={{ color: 'primary.main' }} />
+          </Box>
+        ) : projectsError ? (
+          <Alert severity="error" sx={{ m: 2.5 }}>
+            Failed to load projects for this organisation.
+          </Alert>
+        ) : projects.length === 0 ? (
+          <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+              No projects found for this organisation.
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer component={Paper} elevation={0}>
+            <Table sx={{ minWidth: 500 }}>
+              <TableHead sx={{ backgroundColor: '#F8FAFC' }}>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, color: '#475569', fontSize: '0.8rem', textTransform: 'uppercase' }}>
+                    Project Name
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#475569', fontSize: '0.8rem', textTransform: 'uppercase' }}>
+                    Risk Score
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 700, color: '#475569', fontSize: '0.8rem', textTransform: 'uppercase' }}>
+                    Open Risks Count
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {projects.map((project) => {
+                  const risks = projectRisksMap.get(project.id) || [];
+                  const openCount = risks.filter((r) => r.status !== 'closed').length;
+
+                  return (
+                    <TableRow
+                      key={project.id}
+                      hover
+                      sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                    >
+                      {/* Column 1: Project Name */}
+                      <TableCell sx={{ py: 2 }}>
+                        <Typography variant="body1" sx={{ fontWeight: 600, color: '#0F172A' }}>
+                          {project.name}
                         </Typography>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          {proj.risksCount} active risks • Updated {proj.updated}
+                      </TableCell>
+
+                      {/* Column 2: Risk Score */}
+                      <TableCell sx={{ py: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Chip
+                            label={`${project.risk_score} / 100`}
+                            size="small"
+                            sx={{
+                              fontWeight: 700,
+                              bgcolor: project.risk_score > 50 ? '#FEE2E2' : project.risk_score > 20 ? '#FFEDD5' : '#ECFDF5',
+                              color: project.risk_score > 50 ? '#B91C1C' : project.risk_score > 20 ? '#C2410C' : '#047857',
+                            }}
+                          />
+                        </Box>
+                      </TableCell>
+
+                      {/* Column 3: Open Risks Count (Clickable!) */}
+                      <TableCell sx={{ py: 2 }}>
+                        <Chip
+                          label={`${openCount} open ${openCount === 1 ? 'risk' : 'risks'}`}
+                          size="small"
+                          clickable
+                          onClick={() => handleOpenProjectRisks(project)}
+                          data-testid={`project-open-risks-${project.id}`}
+                          sx={{
+                            fontWeight: 600,
+                            bgcolor: openCount > 0 ? '#FFF3EE' : '#F1F5F9',
+                            color: openCount > 0 ? 'primary.main' : '#64748B',
+                            border: '1px solid',
+                            borderColor: openCount > 0 ? '#FECBB8' : '#CBD5E1',
+                            '&:hover': {
+                              bgcolor: '#FEE5DC',
+                              borderColor: 'primary.main',
+                            },
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Card>
+
+      {/* 3. Risk Details Drawer (Shows non-closed risks) */}
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 540 },
+            p: 3,
+            backgroundColor: '#F8FAFC',
+          },
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#0F172A' }}>
+            {drawerTitle}
+          </Typography>
+          <IconButton onClick={() => setDrawerOpen(false)} size="small" aria-label="close drawer">
+            <CloseRoundedIcon />
+          </IconButton>
+        </Box>
+
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
+          {isConsultant ? 'Review and manage non-closed project risks.' : 'Read-only view of non-closed engagement risks.'}
+        </Typography>
+
+        <Divider sx={{ mb: 2.5 }} />
+
+        {drawerRisks.length === 0 ? (
+          <Box sx={{ p: 4, textAlign: 'center', bgcolor: '#FFFFFF', borderRadius: 2, border: '1px solid #E2E8F0' }}>
+            <Typography variant="body1" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+              No open or mitigating risks.
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {drawerRisks.map((risk) => (
+              <Card
+                key={risk.id}
+                sx={{
+                  borderRadius: 2.5,
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                }}
+              >
+                <CardContent sx={{ p: 2.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F172A', fontSize: '1rem' }}>
+                        {risk.title}
+                      </Typography>
+                      {risk.projectName && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.25 }}>
+                          Project: <strong>{risk.projectName}</strong>
                         </Typography>
-                      </Box>
-                      <Chip
-                        label={`Score: ${proj.score}`}
-                        size="small"
-                        sx={{
-                          fontWeight: 700,
-                          bgcolor: proj.score > 20 ? '#FEE2E2' : proj.score > 0 ? '#FEF3C7' : '#D1FAE5',
-                          color: proj.score > 20 ? '#B91C1C' : proj.score > 0 ? '#B45309' : '#047857',
-                        }}
-                      />
+                      )}
                     </Box>
-
-                    <Box sx={{ mt: 1.5 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                          Risk Exposure Gauge
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                          {proj.score}%
-                        </Typography>
-                      </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={Math.min(proj.score, 100)}
-                        sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: '#F1F5F9',
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: proj.score > 20 ? '#EF4444' : proj.score > 0 ? '#F59E0B' : '#10B981',
-                          },
-                        }}
-                      />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      {getSeverityChip(risk.severity)}
+                      {getStatusChip(risk.status)}
                     </Box>
                   </Box>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
 
-        {/* Identified Risks Table */}
-        <Grid item xs={12} lg={7} sx={{ display: 'flex' }}>
-          <Card
-            sx={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              borderRadius: 3,
-              border: '1px solid #E2E8F0',
-            }}
-          >
-            <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h3">Active Risk Register</Typography>
-                <Button size="small" variant="text" disabled sx={{ color: '#94A3B8 !important' }}>
-                  Filter Risks
-                </Button>
-              </Box>
+                  <Typography variant="body2" sx={{ color: '#334155', mt: 1.5, lineHeight: 1.5 }}>
+                    {risk.description || 'No description provided.'}
+                  </Typography>
 
-              <TableContainer sx={{ border: '1px solid #F1F5F9', borderRadius: 2, flex: 1 }}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Risk Title</TableCell>
-                      <TableCell>Severity</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="center">Impact</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {RECENT_RISKS.map((risk) => (
-                      <TableRow key={risk.id} hover>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>
-                            {risk.title}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                            {risk.owner} • {risk.project}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{getSeverityChip(risk.severity)}</TableCell>
-                        <TableCell>{getStatusChip(risk.status)}</TableCell>
-                        <TableCell align="center">
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: '#1E293B' }}>
-                            +{risk.contribution}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Tooltip title="Actions will be available in the Risk Management milestone" arrow>
-                            <span>
-                              <IconButton size="small" disabled sx={{ color: '#94A3B8 !important' }}>
-                                <MoreVertRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, pt: 1.5, borderTop: '1px solid #F1F5F9' }}>
+                    <Typography variant="caption" sx={{ color: '#64748B', fontWeight: 500 }}>
+                      Owner: <strong>{risk.owner || 'Unassigned'}</strong>
+                    </Typography>
+
+                    {/* Consultants can edit; Client viewers are read-only */}
+                    {isConsultant && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<EditRoundedIcon fontSize="small" />}
+                        onClick={() => handleStartEdit(risk)}
+                        sx={{ fontSize: '0.75rem', py: 0.5, px: 1.25 }}
+                      >
+                        Edit
+                      </Button>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        )}
+      </Drawer>
+
+      {/* 4. Edit Risk Dialog (Consultant only) */}
+      <Dialog
+        open={Boolean(editingRisk)}
+        onClose={() => setEditingRisk(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
+          Edit Risk Details
+        </DialogTitle>
+        <Box component="form" onSubmit={handleSaveEdit}>
+          <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
+            {editError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {editError}
+              </Alert>
+            )}
+
+            <TextField
+              label="Title"
+              fullWidth
+              required
+              value={editFormData.title || ''}
+              onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })}
+            />
+
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              rows={3}
+              value={editFormData.description || ''}
+              onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+            />
+
+            <Grid container spacing={2}>
+              <Grid item xs={6}>
+                <TextField
+                  select
+                  label="Severity"
+                  fullWidth
+                  value={editFormData.severity || 'medium'}
+                  onChange={(e) => setEditFormData({ ...editFormData, severity: e.target.value as RiskSeverity })}
+                >
+                  <MenuItem value="low">Low (Weight 1)</MenuItem>
+                  <MenuItem value="medium">Medium (Weight 2)</MenuItem>
+                  <MenuItem value="high">High (Weight 3)</MenuItem>
+                  <MenuItem value="critical">Critical (Weight 4)</MenuItem>
+                </TextField>
+              </Grid>
+
+              <Grid item xs={6}>
+                <TextField
+                  select
+                  label="Status"
+                  fullWidth
+                  value={editFormData.status || 'open'}
+                  onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value as RiskStatus })}
+                >
+                  <MenuItem value="open">Open (Weight 3)</MenuItem>
+                  <MenuItem value="mitigating">Mitigating (Weight 2)</MenuItem>
+                  <MenuItem value="closed">Closed (Weight 0)</MenuItem>
+                </TextField>
+              </Grid>
+            </Grid>
+
+            <TextField
+              label="Owner"
+              fullWidth
+              value={editFormData.owner || ''}
+              onChange={(e) => setEditFormData({ ...editFormData, owner: e.target.value })}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <Button onClick={() => setEditingRisk(null)} disabled={updateRiskMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={updateRiskMutation.isPending}
+              sx={{ fontWeight: 600 }}
+            >
+              {updateRiskMutation.isPending ? <CircularProgress size={20} sx={{ color: '#FFFFFF' }} /> : 'Save Changes'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
     </Box>
   );
 }

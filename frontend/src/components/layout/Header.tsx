@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   AppBar,
@@ -12,26 +12,30 @@ import {
   Avatar,
   Tooltip,
   Button,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
+import ArrowDropDownRoundedIcon from '@mui/icons-material/ArrowDropDownRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { useAuth } from '@/context/AuthContext';
+import { OrganisationRef } from '@/types/auth';
 
 interface HeaderProps {
   onMobileDrawerToggle: () => void;
 }
 
 export default function Header({ onMobileDrawerToggle }: HeaderProps) {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, selectedOrganisation, setSelectedOrganisation, availableOrganisations } = useAuth();
+  const [orgAnchorEl, setOrgAnchorEl] = useState<null | HTMLElement>(null);
 
-  const activeOrgName = user
-    ? user.role === 'client_viewer'
-      ? user.organisation?.name || 'Assigned Organisation'
-      : user.organisations?.[0]?.name || 'All Assigned Organisations'
-    : 'Acme Corp';
+  const activeOrgName = selectedOrganisation?.name || (user?.role === 'client_viewer' ? user.organisation?.name : user?.organisations?.[0]?.name) || 'Acme Corp';
 
   const userInitials = user?.name
     ? user.name
@@ -41,6 +45,17 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
         .toUpperCase()
         .slice(0, 2)
     : 'AC';
+
+  const handleOrgClick = (event: React.MouseEvent<HTMLElement>) => {
+    if (availableOrganisations.length > 1) {
+      setOrgAnchorEl(event.currentTarget);
+    }
+  };
+
+  const handleOrgSelect = (org: OrganisationRef) => {
+    setSelectedOrganisation(org);
+    setOrgAnchorEl(null);
+  };
 
   return (
     <AppBar position="sticky">
@@ -69,20 +84,65 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Organisation Context Selector Chip */}
-        <Tooltip title="Current active tenant organisation" arrow>
+        <Tooltip title={availableOrganisations.length > 1 ? "Click to switch active tenant organisation" : "Current active tenant organisation"} arrow>
           <Chip
             icon={<BusinessRoundedIcon fontSize="small" />}
             label={activeOrgName}
+            onClick={availableOrganisations.length > 1 ? handleOrgClick : undefined}
+            onDelete={availableOrganisations.length > 1 ? handleOrgClick : undefined}
+            deleteIcon={availableOrganisations.length > 1 ? <ArrowDropDownRoundedIcon /> : undefined}
             variant="outlined"
             size="medium"
+            data-testid="organisation-selector-chip"
             sx={{
               fontWeight: 600,
               borderColor: '#CBD5E1',
               backgroundColor: '#F8FAFC',
+              cursor: availableOrganisations.length > 1 ? 'pointer' : 'default',
               display: { xs: 'none', sm: 'inline-flex' },
+              '&:hover': availableOrganisations.length > 1 ? { bgcolor: '#FFF7ED', borderColor: 'primary.main' } : {},
             }}
           />
         </Tooltip>
+
+        {/* Organisation Switching Menu */}
+        {availableOrganisations.length > 1 && (
+          <Menu
+            anchorEl={orgAnchorEl}
+            open={Boolean(orgAnchorEl)}
+            onClose={() => setOrgAnchorEl(null)}
+            PaperProps={{
+              sx: {
+                mt: 1,
+                minWidth: 200,
+                borderRadius: 2,
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+              },
+            }}
+          >
+            <Box sx={{ px: 2, py: 1, borderBottom: '1px solid #E2E8F0' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase' }}>
+                Switch Organisation
+              </Typography>
+            </Box>
+            {availableOrganisations.map((org) => {
+              const isSelected = selectedOrganisation?.id === org.id;
+              return (
+                <MenuItem
+                  key={org.id}
+                  onClick={() => handleOrgSelect(org)}
+                  selected={isSelected}
+                  sx={{ py: 1 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    {isSelected ? <CheckRoundedIcon fontSize="small" color="primary" /> : <BusinessRoundedIcon fontSize="small" sx={{ color: '#94A3B8' }} />}
+                  </ListItemIcon>
+                  <ListItemText primary={org.name} primaryTypographyProps={{ fontWeight: isSelected ? 700 : 500, fontSize: '0.875rem' }} />
+                </MenuItem>
+              );
+            })}
+          </Menu>
+        )}
 
         {/* User Role Badge */}
         <Chip
@@ -172,4 +232,3 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
     </AppBar>
   );
 }
-
