@@ -1,13 +1,20 @@
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.core.exceptions import PermissionDenied
 from apps.organisations.services import OrganisationService
-from apps.projects.models import Project, Risk
-from apps.projects.serializers import ProjectSerializer, RiskSerializer
+from apps.projects.models import Project, Risk, CSVImportJob
+from apps.projects.serializers import (
+    ProjectSerializer,
+    RiskSerializer,
+    CSVImportJobSerializer,
+    CSVUploadSerializer,
+)
 from apps.projects.services.project_service import ProjectService
 from apps.projects.services.risk_service import RiskService
+from apps.projects.services.csv_job_service import CSVImportJobService
 
 
 class OrganisationProjectListCreateView(APIView):
@@ -214,4 +221,92 @@ class RiskDetailView(APIView):
 
         RiskService.delete_risk(request.user, risk_id)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CSVUploadView(APIView):
+    """
+    POST /api/projects/<project_id>/csv-jobs/
+    POST /api/projects/<project_id>/import-csv/
+    Validates CSV file and creates a new queued import job.
+    Only authorised consultants can upload CSV imports.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, project_id: int):
+        if not request.user.is_consultant:
+            return Response(
+                {'detail': 'Only consultants can upload CSV imports.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        project = ProjectService.get_project_for_user(request.user, project_id)
+        if not project:
+            return Response(
+                {'detail': 'Project not found or access denied.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = CSVUploadSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        uploaded_file = serializer.validated_data['file']
+
+        job = CSVImportJobService.create_import_job(
+            user=request.user,
+            project=project,
+            uploaded_file=uploaded_file
+        )
+
+        return Response(CSVImportJobSerializer(job).data, status=status.HTTP_201_CREATED)
+
+
+class CSVJobDetailView(APIView):
+    """
+    GET /api/csv-jobs/<job_id>/
+    Retrieves job status and error details for an authorised consultant.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, job_id):
+        if not request.user.is_consultant:
+            return Response(
+                {'detail': 'Only consultants can view CSV import jobs.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        job = CSVImportJobService.get_job_for_user(request.user, job_id)
+        if not job:
+            return Response(
+                {'detail': 'CSV import job not found or access denied.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response(CSVImportJobSerializer(job).data, status=status.HTTP_200_OK)
+
+
+class ProjectCSVJobListView(APIView):
+    """
+    GET /api/projects/<project_id>/csv-jobs/
+    Lists CSV import jobs for a project accessible to the consultant.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, project_id: int):
+        if not request.user.is_consultant:
+            return Response(
+                {'detail': 'Only consultants can view CSV import jobs.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        jobs = CSVImportJobService.get_jobs_for_project(request.user, project_id)
+        if jobs is None:
+            return Response(
+                {'detail': 'Project not found or access denied.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return Response(CSVImportJobSerializer(jobs, many=True).data, status=status.HTTP_200_OK)
+
 

@@ -4,6 +4,9 @@ from apps.projects.views import (
     ProjectDetailView,
     ProjectRiskListCreateView,
     RiskDetailView,
+    CSVUploadView,
+    CSVJobDetailView,
+    ProjectCSVJobListView,
 )
 
 urlpatterns = [
@@ -31,5 +34,23 @@ urlpatterns = [
         RiskDetailView.as_view(),
         name='risk_detail'
     ),
+    # CSV Job upload and project-scoped job list
+    path(
+        'projects/<int:project_id>/csv-jobs/',
+        CSVUploadView.as_view(),
+        name='project_csv_upload'
+    ),
+    path(
+        'projects/<int:project_id>/import-csv/',
+        CSVUploadView.as_view(),
+        name='project_import_csv'
+    ),
+    # CSV Job status and error details retrieval
+    path(
+        'csv-jobs/<uuid:job_id>/',
+        CSVJobDetailView.as_view(),
+        name='csv_job_detail'
+    ),
 ]
+
 

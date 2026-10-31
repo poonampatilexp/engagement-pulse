@@ -1,3 +1,5 @@
+import uuid
+from django.conf import settings
 from django.db import models
 
 
@@ -93,4 +95,47 @@ class Risk(models.Model):
 
     def __str__(self):
         return f"{self.title} [{self.severity}/{self.status}]"
+
+
+class JobStatus(models.TextChoices):
+    QUEUED = 'queued', 'Queued'
+    PROCESSING = 'processing', 'Processing'
+    COMPLETED = 'completed', 'Completed'
+    FAILED = 'failed', 'Failed'
+
+
+class CSVImportJob(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='csv_jobs'
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='csv_jobs'
+    )
+    file = models.FileField(upload_to='csv_imports/%Y/%m/%d/')
+    filename = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=20,
+        choices=JobStatus.choices,
+        default=JobStatus.QUEUED,
+        db_index=True
+    )
+    total_rows = models.PositiveIntegerField(default=0)
+    processed_rows = models.PositiveIntegerField(default=0)
+    error_details = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'csv_import_jobs'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"CSVJob {self.id} [{self.status}] - {self.filename}"
+
+
 
