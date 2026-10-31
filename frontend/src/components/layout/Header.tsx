@@ -144,8 +144,7 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
               <IconButton
                 size="small"
                 onClick={logout}
-                component={Link}
-                href="/login"
+                aria-label="sign out"
                 sx={{
                   border: '1px solid #E2E8F0',
                   borderRadius: 2,

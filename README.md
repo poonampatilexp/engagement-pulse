@@ -120,6 +120,13 @@ cd frontend
 npm run build
 ```
 
+To run frontend unit and integration tests (Jest & React Testing Library):
+
+```bash
+cd frontend
+npm test
+```
+
 ---
 
 ## Seeded Demo Accounts
@@ -237,7 +244,41 @@ A project without risks has a score of `0`.
 
 ---
 
+## Authentication & JWT Session Management
+
+Engagement Pulse employs an in-memory access token architecture with an `HttpOnly` cookie-backed refresh strategy:
+- **Access Tokens:** Maintained strictly in-memory (`AuthContext` and `apiClient`). Tokens are never persisted to `localStorage` or `sessionStorage`, mitigating XSS credential theft.
+- **Refresh Tokens:** Issued as `HttpOnly`, `SameSite=Lax`, `Path=/api/auth/` cookies by Next.js Backend-For-Frontend (BFF) route handlers (`/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`), forwarding to Django Simple JWT.
+- **Deduplicated Refresh & Retry:** The API client intercepts `401 Unauthorized` responses and triggers a single in-flight token refresh promise. Concurrent requests awaiting refresh are queued and retried together with the fresh access token, preventing duplicate refresh operations.
+- **Protected Routes & Flashing Prevention:** `AppShell` guards protected routes (`/`) by verifying session state. While verifying, a branded loading spinner is rendered; unauthenticated visitors are redirected to `/login` without exposing protected DOM content. Authenticated visitors visiting `/login` are automatically redirected to `/`.
+- **Cache-Clearing Logout:** The logout action calls `/api/auth/logout/` (purging the cookie), wipes the in-memory access token, clears the entire TanStack React Query cache (`queryClient.clear()`), and navigates to `/login`.
+
+---
+
 ## Verification & Testing
+
+### Frontend Test Suite (Jest & React Testing Library)
+
+Execute the frontend tests:
+
+```bash
+npm --prefix frontend test
+```
+
+The frontend test suite validates:
+1. In-memory access token storage and header attachment on API requests.
+2. Transparent token refresh on 401 with immediate single-retry.
+3. Concurrent request deduplication ensuring only one refresh request fires across simultaneous failures.
+4. Refresh failure handling with token clearance and authentication failure callback.
+5. Protected route redirection to `/login` for unauthenticated visitors.
+6. Redirection away from `/login` to `/` for authenticated visitors.
+7. Branded loading indicator during authentication check preventing protected content exposure.
+8. Role rendering and organization details for Consultants and Client Viewers.
+9. Complete cache clearance (`queryClient.clear()`) and in-memory wipe upon logout.
+
+---
+
+### Backend Test Suite (Pytest)
 
 Execute the complete backend test suite:
 
