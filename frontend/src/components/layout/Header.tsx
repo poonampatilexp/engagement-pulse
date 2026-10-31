@@ -46,8 +46,11 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
         .slice(0, 2)
     : 'AC';
 
+  const isConsultant = user?.role === 'consultant';
+  const canSwitchOrgs = isConsultant && availableOrganisations.length > 1;
+
   const handleOrgClick = (event: React.MouseEvent<HTMLElement>) => {
-    if (availableOrganisations.length > 1) {
+    if (canSwitchOrgs) {
       setOrgAnchorEl(event.currentTarget);
     }
   };
@@ -84,13 +87,13 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Organisation Context Selector Chip */}
-        <Tooltip title={availableOrganisations.length > 1 ? "Click to switch active tenant organisation" : "Current active tenant organisation"} arrow>
+        <Tooltip title={canSwitchOrgs ? "Click to switch active tenant organisation" : "Current active tenant organisation"} arrow>
           <Chip
             icon={<BusinessRoundedIcon fontSize="small" />}
             label={activeOrgName}
-            onClick={availableOrganisations.length > 1 ? handleOrgClick : undefined}
-            onDelete={availableOrganisations.length > 1 ? handleOrgClick : undefined}
-            deleteIcon={availableOrganisations.length > 1 ? <ArrowDropDownRoundedIcon /> : undefined}
+            onClick={canSwitchOrgs ? handleOrgClick : undefined}
+            onDelete={canSwitchOrgs ? handleOrgClick : undefined}
+            deleteIcon={canSwitchOrgs ? <ArrowDropDownRoundedIcon /> : undefined}
             variant="outlined"
             size="medium"
             data-testid="organisation-selector-chip"
@@ -98,15 +101,15 @@ export default function Header({ onMobileDrawerToggle }: HeaderProps) {
               fontWeight: 600,
               borderColor: '#CBD5E1',
               backgroundColor: '#F8FAFC',
-              cursor: availableOrganisations.length > 1 ? 'pointer' : 'default',
+              cursor: canSwitchOrgs ? 'pointer' : 'default',
               display: { xs: 'none', sm: 'inline-flex' },
-              '&:hover': availableOrganisations.length > 1 ? { bgcolor: '#FFF7ED', borderColor: 'primary.main' } : {},
+              '&:hover': canSwitchOrgs ? { bgcolor: '#FFF7ED', borderColor: 'primary.main' } : {},
             }}
           />
         </Tooltip>
 
-        {/* Organisation Switching Menu */}
-        {availableOrganisations.length > 1 && (
+        {/* Organisation Switching Menu (Consultants with multiple organisations only) */}
+        {canSwitchOrgs && (
           <Menu
             anchorEl={orgAnchorEl}
             open={Boolean(orgAnchorEl)}

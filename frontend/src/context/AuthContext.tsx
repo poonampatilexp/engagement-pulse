@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserProfile, LoginResponse, OrganisationRef } from '@/types/auth';
@@ -29,29 +29,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedOrganisation, setSelectedOrganisation] = useState<OrganisationRef | null>(null);
+  const [selectedOrganisation, setSelectedOrganisationState] = useState<OrganisationRef | null>(null);
+  const [availableOrganisations, setAvailableOrganisations] = useState<OrganisationRef[]>([]);
 
-  const availableOrganisations: OrganisationRef[] = useMemo(() => {
-    if (!user) return [];
-    if (user.role === 'client_viewer') {
-      return user.organisation ? [user.organisation] : [];
-    }
-    return user.organisations || [];
-  }, [user]);
-
-  // Sync selectedOrganisation when availableOrganisations change
-  useEffect(() => {
-    if (availableOrganisations.length > 0) {
-      setSelectedOrganisation((prev) => {
-        if (prev && availableOrganisations.some((org) => org.id === prev.id)) {
-          return prev;
-        }
-        return availableOrganisations[0];
-      });
-    } else {
-      setSelectedOrganisation(null);
-    }
-  }, [availableOrganisations]);
+  // 4. & 5. Switching organisations updates the active organisation and clears previous organisation data
+  const setSelectedOrganisation = useCallback(
+    (org: OrganisationRef) => {
+      // Clear previous organisation data from React Query cache
+      queryClient.removeQueries({ queryKey: ['projects'] });
+      queryClient.removeQueries({ queryKey: ['risks'] });
+      setSelectedOrganisationState(org);
+    },
+    [queryClient]
+  );
 
   const login = useCallback((data: LoginResponse) => {
     setAccessToken(data.access);
@@ -67,7 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setAccessToken(null);
       setUser(null);
-      setSelectedOrganisation(null);
+      setSelectedOrganisationState(null);
+      setAvailableOrganisations([]);
       apiClient.setAccessToken(null);
       // Completely wipe TanStack React Query cache to prevent data leakage
       queryClient.clear();
@@ -87,11 +78,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       setAccessToken(null);
       setUser(null);
-      setSelectedOrganisation(null);
+      setSelectedOrganisationState(null);
+      setAvailableOrganisations([]);
       apiClient.setAccessToken(null);
       return false;
     }
   }, []);
+
+  // 3. Fetch organisations from GET /api/organisations/ when authenticated
+  useEffect(() => {
+    let isMounted = true;
+
+    if (accessToken && user) {
+      apiClient.organisations
+        .list()
+        .then((orgs) => {
+          if (!isMounted) return;
+          setAvailableOrganisations(orgs);
+          setSelectedOrganisationState((prev) => {
+            if (prev && orgs.some((o) => o.id === prev.id)) {
+              return prev;
+            }
+            return orgs[0] || null;
+          });
+        })
+        .catch(() => {
+          if (!isMounted) return;
+          // Fallback to user profile organisation data if endpoint encounters error
+          const fallbackOrgs =
+            user.role === 'client_viewer'
+              ? user.organisation
+                ? [user.organisation]
+                : []
+              : user.organisations || [];
+          setAvailableOrganisations(fallbackOrgs);
+          setSelectedOrganisationState((prev) => prev || fallbackOrgs[0] || null);
+        });
+    } else {
+      setAvailableOrganisations([]);
+      setSelectedOrganisationState(null);
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, user]);
 
   useEffect(() => {
     let isMounted = true;
@@ -107,7 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isMounted) {
         setAccessToken(null);
         setUser(null);
-        setSelectedOrganisation(null);
+        setSelectedOrganisationState(null);
+        setAvailableOrganisations([]);
         apiClient.setAccessToken(null);
         queryClient.clear();
         router.replace('/login');
@@ -129,7 +161,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setAccessToken(null);
           setUser(null);
-          setSelectedOrganisation(null);
+          setSelectedOrganisationState(null);
+          setAvailableOrganisations([]);
           apiClient.setAccessToken(null);
         }
       } finally {

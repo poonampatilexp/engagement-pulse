@@ -26,6 +26,9 @@ describe('Protected Routes & Session Guard', () => {
     queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    jest.spyOn(apiClient.organisations, 'list').mockResolvedValue([
+      { id: 1, name: 'Acme Corp', slug: 'acme' },
+    ]);
   });
 
   const renderWithProviders = (ui: React.ReactNode) => {
