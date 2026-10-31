@@ -6,6 +6,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { theme } from '@/theme/theme';
 import QueryProvider from './QueryProvider';
+import { AuthProvider } from '@/context/AuthContext';
 
 export default function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -13,7 +14,9 @@ export default function AppProviders({ children }: { children: React.ReactNode }
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <QueryProvider>
-          {children}
+          <AuthProvider>
+            {children}
+          </AuthProvider>
         </QueryProvider>
       </ThemeProvider>
     </AppRouterCacheProvider>

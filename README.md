@@ -13,7 +13,7 @@ Consultants manage projects and risks for assigned client organisations. Client 
 - **Authentication:** JWT via `djangorestframework-simplejwt`
 - **Background Processing:** Dramatiq with Redis *(Upcoming)*
 - **Real-Time Updates:** Django Channels with `channels_redis` *(Upcoming)*
-- **Frontend:** React, Next.js App Router, TypeScript, React Query *(Upcoming)*
+- **Frontend:** React 18, Next.js 14 App Router, TypeScript, Material UI (MUI), TanStack React Query
 - **Testing:** pytest, pytest-django, React Testing Library, Playwright
 - **Infrastructure:** Docker Compose
 
@@ -92,6 +92,33 @@ This command idempotently:
 3. Creates one consultant (`consultant@engagementpulse.com`) assigned to both organisations.
 4. Creates client viewers for Acme and Globex.
 5. Seeds demo projects and risks, calculating initial project risk scores.
+
+### 7. Run the Backend API Server
+
+Start the Django development server on port 8000:
+
+```bash
+python backend/manage.py runserver 8000
+```
+
+### 8. Frontend Setup & Run
+
+In a separate terminal, install Node.js dependencies and start the Next.js development server:
+
+```bash
+cd frontend
+npm install
+npm run dev -- -p 3000
+```
+
+Open [http://localhost:3000/login](http://localhost:3000/login) in your browser. All `/api/*` requests are proxied automatically to `http://127.0.0.1:8000`.
+
+To build the production bundle:
+
+```bash
+cd frontend
+npm run build
+```
 
 ---
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Box, Container } from '@mui/material';
 import Sidebar, { DRAWER_WIDTH, COLLAPSED_WIDTH } from './Sidebar';
 import Header from './Header';
@@ -10,8 +11,26 @@ interface AppShellProps {
 }
 
 export default function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // If viewing authentication pages, render full screen without dashboard shell
+  if (pathname === '/login') {
+    return (
+      <Box
+        component="main"
+        sx={{
+          minHeight: '100vh',
+          backgroundColor: 'background.default',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {children}
+      </Box>
+    );
+  }
 
   const handleToggleCollapse = () => {
     setCollapsed(!collapsed);
