@@ -37,3 +37,13 @@ class OrganisationService:
         except Organisation.DoesNotExist:
             return None
 
+    @staticmethod
+    def user_has_organisation_access(user: User, organisation_id: int) -> bool:
+        """
+        Checks if the user has access to the given organisation.
+        """
+        if not user or not user.is_authenticated or not organisation_id:
+            return False
+        return OrganisationService.get_organisations_for_user(user).filter(id=organisation_id).exists()
+
+
