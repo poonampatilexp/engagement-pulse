@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Third-party apps
+    'django_dramatiq',
     'rest_framework',
     'rest_framework_simplejwt',
     # Local apps
@@ -157,3 +158,22 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
+# Redis configuration
+REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
+
+# Dramatiq configuration
+DRAMATIQ_BROKER = {
+    'BROKER': 'dramatiq.brokers.redis.RedisBroker',
+    'OPTIONS': {
+        'url': REDIS_URL,
+    },
+    'MIDDLEWARE': [
+        'dramatiq.middleware.AgeLimit',
+        'dramatiq.middleware.TimeLimit',
+        'dramatiq.middleware.Callbacks',
+        'dramatiq.middleware.Pipelines',
+        'dramatiq.middleware.Retries',
+        'django_dramatiq.middleware.DbConnectionsMiddleware',
+        'django_dramatiq.middleware.AdminMiddleware',
+    ],
+}
