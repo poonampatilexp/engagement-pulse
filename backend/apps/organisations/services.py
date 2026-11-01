@@ -1,7 +1,12 @@
+import logging
 from typing import Optional
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.db.models import QuerySet
 from apps.organisations.models import Organisation
 from apps.users.models import User, UserRole
+
+logger = logging.getLogger(__name__)
 
 
 class OrganisationService:
@@ -45,5 +50,32 @@ class OrganisationService:
         if not user or not user.is_authenticated or not organisation_id:
             return False
         return OrganisationService.get_organisations_for_user(user).filter(id=organisation_id).exists()
+
+
+class RealtimeBroadcastService:
+    @staticmethod
+    def broadcast_data_changed(organisation_id: int, project_id: Optional[int] = None) -> None:
+        """
+        Publishes a {"type": "data_changed"} invalidation signal to the affected organisation's
+        Django Channels group (org_<organisation_id>).
+        Transmits only invalidation signals (no risk details or sensitive data).
+        """
+        channel_layer = get_channel_layer()
+        if not channel_layer:
+            return
+
+        group_name = f"org_{organisation_id}"
+        message = {
+            "type": "data_changed",
+            "organisation_id": organisation_id,
+        }
+        if project_id is not None:
+            message["project_id"] = project_id
+
+        try:
+            async_to_sync(channel_layer.group_send)(group_name, message)
+        except Exception as exc:
+            logger.warning("Failed to broadcast realtime update to %s: %s", group_name, exc)
+
 
 

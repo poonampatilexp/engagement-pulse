@@ -2,7 +2,7 @@ from typing import Optional, Dict, Any
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import QuerySet
-from apps.organisations.services import OrganisationService
+from apps.organisations.services import OrganisationService, RealtimeBroadcastService
 from apps.projects.models import Project, Risk
 from apps.projects.services.scoring_service import RiskScoringService
 from apps.projects.services.project_service import ProjectService
@@ -67,6 +67,11 @@ class RiskService:
             )
             # Concurrency-safe automatic risk score recalculation on locked project
             RiskScoringService.recalculate_project_score(project.id, project=project)
+            org_id = project.organisation_id
+            proj_id = project.id
+            transaction.on_commit(
+                lambda: RealtimeBroadcastService.broadcast_data_changed(org_id, project_id=proj_id)
+            )
             return risk
 
     @staticmethod
@@ -101,6 +106,11 @@ class RiskService:
             risk.save()
             # Concurrency-safe automatic risk score recalculation on locked project
             RiskScoringService.recalculate_project_score(project.id, project=project)
+            org_id = project.organisation_id
+            proj_id = project.id
+            transaction.on_commit(
+                lambda: RealtimeBroadcastService.broadcast_data_changed(org_id, project_id=proj_id)
+            )
             return risk
 
     @staticmethod
@@ -120,7 +130,11 @@ class RiskService:
             project_id = risk.project_id
             # Acquire Project row lock BEFORE risk deletion
             project = Project.objects.select_for_update().get(id=project_id)
+            org_id = project.organisation_id
             risk.delete()
             # Concurrency-safe automatic risk score recalculation on locked project
             RiskScoringService.recalculate_project_score(project_id, project=project)
+            transaction.on_commit(
+                lambda: RealtimeBroadcastService.broadcast_data_changed(org_id, project_id=project_id)
+            )
 

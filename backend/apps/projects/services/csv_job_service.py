@@ -5,7 +5,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import QuerySet
-from apps.organisations.services import OrganisationService
+from apps.organisations.services import OrganisationService, RealtimeBroadcastService
 from apps.projects.models import (
     Project,
     Risk,
@@ -189,6 +189,12 @@ class CSVImportJobService:
                 job.processed_rows = len(valid_records)
                 job.error_details = {}
                 job.save(update_fields=['status', 'total_rows', 'processed_rows', 'error_details', 'updated_at'])
+
+                org_id = job.project.organisation_id
+                proj_id = job.project_id
+                transaction.on_commit(
+                    lambda: RealtimeBroadcastService.broadcast_data_changed(org_id, project_id=proj_id)
+                )
 
             return job
 

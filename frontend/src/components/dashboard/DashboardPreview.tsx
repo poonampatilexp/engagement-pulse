@@ -41,6 +41,7 @@ import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
 import { Project, Risk, RiskSeverity, RiskStatus, UpdateRiskPayload } from '@/types/project';
 import CSVImportDialog from '@/components/dashboard/CSVImportDialog';
+import { useOrganisationUpdates } from '@/hooks/useOrganisationUpdates';
 
 function getSeverityChip(severity: RiskSeverity) {
   switch (severity) {
@@ -72,6 +73,9 @@ export default function DashboardPreview() {
   const isConsultant = user?.role === 'consultant';
 
   const orgId = selectedOrganisation?.id;
+
+  // Maintain live WebSocket updates for active organisation
+  useOrganisationUpdates(orgId);
 
   // 1. Fetch projects for the active organisation
   const {

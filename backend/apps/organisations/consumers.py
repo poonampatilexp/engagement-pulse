@@ -1,3 +1,4 @@
+import json
 from urllib.parse import parse_qs
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -55,6 +56,21 @@ class OrganisationUpdatesConsumer(AsyncWebsocketConsumer):
                 self.group_name,
                 self.channel_name
             )
+
+    async def data_changed(self, event):
+        """
+        Sends invalidation signal to client when data within organisation changes.
+        Transmits only invalidation payload, no risk details or sensitive data.
+        """
+        payload = {
+            "type": "data_changed",
+        }
+        if "organisation_id" in event:
+            payload["organisation_id"] = event["organisation_id"]
+        if "project_id" in event:
+            payload["project_id"] = event["project_id"]
+
+        await self.send(text_data=json.dumps(payload))
 
     @database_sync_to_async
     def _check_organisation_access(self, user: User, organisation_id: int) -> bool:

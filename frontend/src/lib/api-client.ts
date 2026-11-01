@@ -193,6 +193,12 @@ export const apiClient = {
       });
     },
 
+    async getWebSocketTicket(): Promise<{ ticket: string; expires_in: number }> {
+      return request<{ ticket: string; expires_in: number }>('/api/auth/ws-ticket/', {
+        method: 'POST',
+      });
+    },
+
     async logout(): Promise<void> {
       try {
         await request<{ success: boolean }>('/api/auth/logout/', {
