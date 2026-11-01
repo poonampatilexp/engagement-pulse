@@ -68,7 +68,7 @@ Do not substitute frameworks or introduce unnecessary dependencies without appro
 - Validate CSV structure, required fields and field values.
 - Import records within a database transaction.
 - Recalculate the project risk score after successful import.
-- Track job status (queued, running, completed, failed) in PostgreSQL.
+- Track job status (queued, processing, completed, failed) in PostgreSQL.
 - Handle worker retries and duplicate task deliveries safely.
 - Expose an API endpoint to retrieve job status and errors.
 - Broadcast successful import updates through Django Channels and Redis.
@@ -113,7 +113,7 @@ Do not substitute frameworks or introduce unnecessary dependencies without appro
 - master contains verified, finalised milestones.
 - Never push or merge into master automatically.
 - Do not rewrite history or force-push.
-- Make small, meaningful commits after verified milestones.
+- Propose small, meaningful commits after verified milestones; commit only with explicit approval.
 - Explain what was changed and tested before committing.
 - Never commit secrets, credentials, .env files or generated caches.
 - Update README alongside implementation changes.
