@@ -1,342 +1,92 @@
 # Engagement Pulse
 
-A secure, multi-tenant engagement risk management application.
+**A multi-tenant project risk dashboard with asynchronous imports and live client updates.**
 
-Consultants manage projects and risks for assigned client organisations. Client viewers have read-only access to their own organisation's data.
+Engagement Pulse helps consultants track project risks across client organisations while giving stakeholders a read-only, continuously updated view of delivery health. It is designed around three practical requirements: **strict tenant isolation**, **non-blocking bulk processing**, and **real-time updates across application instances**.
 
----
+## Highlights
 
-## Approved Technology Stack
+- **Organisation-scoped access:** Consultants work across assigned organisations; client viewers can only read data belonging to their organisation. Permissions are enforced by Django APIs, not just the UI.
+- **Asynchronous CSV imports:** Uploads run through Dramatiq and Redis, with persisted job status and automatic risk-score recalculation.
+- **Live dashboards:** Django Channels broadcasts organisation-specific change signals through Redis. Connected clients invalidate React Query caches and fetch fresh data without a page reload.
+- **Reproducible setup:** Docker Compose starts the complete stack, applies migrations and seeds demo data.
 
-- **Backend:** Python 3.12, Django 5, Django REST Framework
-- **Database:** PostgreSQL 16 (Django ORM & migrations)
-- **Authentication:** JWT via `djangorestframework-simplejwt`
-- **Background Processing:** Dramatiq with Redis
-- **Real-Time Updates:** Django Channels with `channels_redis` and Daphne ASGI
-- **Frontend:** React 18, Next.js 14 App Router, TypeScript, Material UI (MUI), TanStack React Query
-- **Testing:** pytest, pytest-django, React Testing Library, Playwright
-- **Infrastructure:** Docker Compose
+## Architecture
 
----
+```text
+                 Next.js / React dashboard
+                  |                 ^
+            REST / JWT         WebSocket updates
+                  |                 |
+                  v                 |
+              Django / DRF / Channels (Daphne)
+                 |             |
+             PostgreSQL      Redis
+                 ^          /    \
+                 |     Channels  Dramatiq queue
+                 |                    |
+                 +------ Dramatiq worker
+                       (CSV processing)
+```
 
-## One-Command Startup (Docker Compose)
+**Technology:** Next.js 14, React 18, TypeScript, Material UI, React Query · Django 5, Django REST Framework, Django Channels, Daphne · PostgreSQL 16 · Redis · Dramatiq · Docker Compose.
 
-### Prerequisites
+### Key engineering decisions
 
-- **Docker Desktop** (or Docker Engine with Docker Compose v2+)
+| Concern                  | Approach                                                                                                                                     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tenant security          | API-level organisation scoping and role-based write permissions; cross-tenant resources are not exposed.                                     |
+| Background processing    | CSV imports are queued and tracked in PostgreSQL; workers process uploads independently of HTTP requests.                                    |
+| Cross-instance updates   | Redis-backed Channels groups broadcast lightweight `data_changed` signals after database commits; the frontend refetches authoritative data. |
+| WebSocket authentication | Authenticated clients request 30-second, single-use connection tickets, consumed atomically in Redis.                                        |
+| Session management       | Short-lived access tokens in memory; refresh tokens managed through HttpOnly cookies in Next.js route handlers.                              |
+| Risk consistency         | Configurable weights are persisted in PostgreSQL; project scores are recalculated transactionally with row-level locking.                    |
 
-### Startup
+## Quick start
 
-To build and start all five services with automated database migrations and seeded demo data in a single command:
+**Prerequisite:** Docker Desktop or Docker Engine with Docker Compose v2.
+
+From the repository root:
 
 ```bash
 docker compose up --build
 ```
 
-*(On detached mode: `docker compose up --build -d`)*
+Open **http://localhost:3000**. The API runs at **http://localhost:8000**. Migrations and demo-data seeding run automatically; no separate worker or database setup is required.
 
-### Application URLs
+### Demo accounts
 
-- **Frontend Application:** [http://localhost:3000](http://localhost:3000)
-- **Backend API & WebSockets:** [http://localhost:8000](http://localhost:8000) (WebSocket: `ws://localhost:8000/ws/organisations/<id>/updates/`)
+All demo accounts use the password **`Password123!`** (local development only).
 
-### Seeded Demo Logins
+| Role          | Email                            | Access                           |
+| ------------- | -------------------------------- | -------------------------------- |
+| Consultant    | `consultant@engagementpulse.com` | Acme Corp and Globex Corporation |
+| Client Viewer | `viewer.acme@example.com`        | Acme Corp, read-only             |
+| Client Viewer | `viewer.globex@example.com`      | Globex Corporation, read-only    |
 
-All accounts use the password: `Password123!`
+Stop services with `docker compose down`. To reset the local database and reseed, run `docker compose down -v` followed by `docker compose up --build` (**this deletes local Docker volumes**).
 
-| Role | Email | Password | Access Scope |
-| :--- | :--- | :--- | :--- |
-| **Consultant** | `consultant@engagementpulse.com` | `Password123!` | Multi-tenant access to both **Acme Corp** and **Globex Corporation** (Create/Edit risks, CSV upload) |
-| **Client Viewer (Acme)** | `viewer.acme@example.com` | `Password123!` | Read-only access strictly restricted to **Acme Corp** |
-| **Client Viewer (Globex)** | `viewer.globex@example.com` | `Password123!` | Read-only access strictly restricted to **Globex Corporation** |
+## Explore the application
 
-### How to Stop the Application
+1. **Consultant:** Sign in, switch between organisations, edit a project risk or upload a CSV file, and follow the import job status.
+2. **Client Viewer:** Sign in separately to view the assigned organisation's projects, risks and recalculated scores. Write operations and cross-organisation access are denied by the API.
+3. **Live updates:** Keep both sessions open. When the consultant updates a risk, the viewer receives a change signal and the dashboard refreshes without a page reload.
 
-```bash
-docker compose down
-```
+### Risk scoring
 
-### How to Reset Demo Data
+Risk contributions are calculated as **severity weight × status weight**, summed per project and capped at 100. Severity weights are low = 1, medium = 2, high = 3, critical = 4; status weights are open = 3, mitigating = 2, closed = 0. A project with no risks scores 0.
 
-To wipe the database volume and re-run migrations and seeding from a clean slate:
+## Verification
 
-```bash
-docker compose down -v
-docker compose up --build
-```
-
-Alternatively, to re-seed without destroying volumes:
+The implementation has been exercised with **75 passing backend tests** and **30 passing frontend tests**, covering authentication, organisation isolation, risk operations and scoring, CSV processing, and WebSocket behaviour. A Docker-based smoke test verified logins, tenant boundaries, WebSocket handshake and background CSV completion. Cross-instance Redis delivery was also verified manually using two separate Django instances.
 
 ```bash
-docker compose exec backend python manage.py seed_data
+docker compose exec backend pytest
+npm --prefix frontend test -- --watchAll=false
 ```
 
-### Architecture of the Five Services
+**Scope and next steps:** Browser-level E2E automation and a CI workflow were intentionally deferred for this time-boxed exercise. Other potential improvements include audit history, risk trends, frontend project creation and richer filtering/pagination. These are not represented as implemented features.
 
-1. **`db` (PostgreSQL 16):** Persists organisations, users, projects, risks, scoring configurations, and CSV import jobs. Equipped with Docker health checks to prevent startup race conditions.
-2. **`redis` (Redis 7):** In-memory broker powering the Django Channels channel layer, atomic single-use WebSocket connection tickets (`GETDEL`), and the Dramatiq task queue.
-3. **`backend` (Django ASGI / Daphne):** Python 3.12 ASGI service running Daphne on port 8000. Automatically waits for PostgreSQL, applies database migrations, seeds idempotent demo data on startup, and serves REST APIs and WebSockets.
-4. **`worker` (Dramatiq Background Worker):** Dedicated worker container sharing file storage with the backend via `media_data` volume to process CSV import jobs asynchronously and recalculate project risk scores without blocking web requests.
-5. **`frontend` (Next.js 14 App Router):** Production React/TypeScript application running on port 3000. Proxies API requests to `http://backend:8000`, supports HttpOnly refresh cookies, and connects to live WebSocket updates.
+## Development approach
 
----
-
-## Alternative: Manual Local Setup (Without Docker)
-
-### 3. Start PostgreSQL Database
-
-Launch PostgreSQL in the background via Docker Compose:
-
-```bash
-docker-compose up -d db
-```
-
-### 4. Install Backend Dependencies
-
-Create a virtual environment and install the requirements:
-
-```bash
-python -m venv .venv
-# On Windows:
-.venv\Scripts\activate
-# On Linux/macOS:
-source .venv/bin/activate
-
-pip install -r backend/requirements.txt
-```
-
-### 5. Run Database Migrations
-
-Apply Django migrations to set up the User, Organisation, Project, and Risk schema:
-
-```bash
-python backend/manage.py migrate
-```
-
-### 6. Seed Demo Data
-
-Run the repeatable seed command:
-
-```bash
-python backend/manage.py seed_data
-```
-
-This command idempotently:
-1. Seeds default risk scoring weights in PostgreSQL.
-2. Creates two client organisations: **Acme Corp** and **Globex Corporation**.
-3. Creates one consultant (`consultant@engagementpulse.com`) assigned to both organisations.
-4. Creates client viewers for Acme and Globex.
-5. Seeds demo projects and risks, calculating initial project risk scores.
-
-### 7. Run the Backend API Server
-
-Start the Django development server on port 8000:
-
-```bash
-python backend/manage.py runserver 8000
-```
-
-### 8. Frontend Setup & Run
-
-In a separate terminal, install Node.js dependencies and start the Next.js development server:
-
-```bash
-cd frontend
-npm install
-npm run dev -- -p 3000
-```
-
-Open [http://localhost:3000/login](http://localhost:3000/login) in your browser. All `/api/*` requests are proxied automatically to `http://127.0.0.1:8000`.
-
-To build the production bundle:
-
-```bash
-cd frontend
-npm run build
-```
-
-To run frontend unit and integration tests (Jest & React Testing Library):
-
-```bash
-cd frontend
-npm test
-```
-
----
-
-## Seeded Demo Accounts
-
-| Role | Email | Password | Assigned Organisation(s) |
-| :--- | :--- | :--- | :--- |
-| **Consultant** | `consultant@engagementpulse.com` | `Password123!` | Acme Corp, Globex Corporation |
-| **Client Viewer** | `viewer.acme@example.com` | `Password123!` | Acme Corp |
-| **Client Viewer** | `viewer.globex@example.com` | `Password123!` | Globex Corporation |
-
----
-
-## Risk Scoring Formula and Weights
-
-Risk severity and status choices are defined in application code, while their weights are persisted in PostgreSQL:
-
-### Severity Weights
-
-| Severity | Weight |
-| :--- | :---: |
-| `low` | 1 |
-| `medium` | 2 |
-| `high` | 3 |
-| `critical` | 4 |
-
-### Status Weights
-
-| Status | Weight |
-| :--- | :---: |
-| `open` | 3 |
-| `mitigating` | 2 |
-| `closed` | 0 |
-
-### Mathematical Formula
-
-$$\text{Individual Risk Contribution} = \text{SeverityWeight} \times \text{StatusWeight}$$
-
-$$\text{Project Risk Score} = \min\left(100, \sum \text{Risk Contributions}\right)$$
-
-A project without risks has a score of `0`.
-
-### Example Calculation
-- High severity (3) and Open status (3) contributes: $3 \times 3 = 9$
-- Medium severity (2) and Mitigating status (2) contributes: $2 \times 2 = 4$
-- **Total Project Risk Score** = $\min(100, 9 + 4) = 13$
-
-### Concurrency and Persistence
-- Calculated scores are saved directly on `Project.risk_score`.
-- Recalculation occurs inside database transactions with PostgreSQL row-level locking (`select_for_update()`) on the `Project` record.
-- Direct client manipulation of `risk_score` is disallowed by serializers.
-
----
-
-## Implemented API Endpoints
-
-### 1. Authentication
-
-- `POST /api/auth/login/`: Accepts `{"email": "...", "password": "..."}`. Returns access token, refresh token, and user profile with assigned organisation scope.
-- `POST /api/auth/refresh/`: Accepts `{"refresh": "..."}`. Returns fresh access token.
-- `GET /api/auth/me/`: Returns current authenticated user details and assigned organisation(s). Requires `Authorization: Bearer <token>`.
-
-### 2. Organisations
-
-- `GET /api/organisations/`: Returns list of organisations accessible to the authenticated user.
-  - **Consultants** receive all organisations assigned via `ConsultantOrganisationAccess`.
-  - **Client Viewers** receive only their single organisation.
-  - **Unauthenticated requests** receive `401 Unauthorized`.
-- `GET /api/organisations/<id>/`: Retrieves a single organisation.
-  - Returns `200 OK` if the user is authorized.
-  - Returns `404 Not Found` if the organisation does not exist or belongs to another tenant.
-
-### 3. Projects
-
-- `GET /api/organisations/<organisation_id>/projects/`: Lists all projects for an organisation.
-- `POST /api/organisations/<organisation_id>/projects/`: Creates a project within an organisation (Consultants only; Client Viewers receive `403 Forbidden`).
-- `GET /api/projects/<project_id>/`: Retrieves project details, including current `risk_score`.
-- `PATCH /api/projects/<project_id>/`: Updates project name (Consultants only).
-- `DELETE /api/projects/<project_id>/`: Deletes project and associated risks (Consultants only).
-
-### 4. Risks
-
-- `GET /api/projects/<project_id>/risks/`: Lists all risks associated with a project.
-- `POST /api/projects/<project_id>/risks/`: Adds a risk to a project. Triggers automatic project score recalculation (Consultants only).
-- `GET /api/risks/<risk_id>/`: Retrieves details of a specific risk.
-- `PATCH /api/risks/<risk_id>/`: Updates risk title, description, severity, status, or owner. Automatically recalculates project score (Consultants only). Reassigning `project` is disallowed.
-- `DELETE /api/risks/<risk_id>/`: Deletes a risk. Automatically recalculates project score (Consultants only).
-
----
-
-## Sample Workflows
-
-### Consultant Workflow
-1. **Login:** Send `POST /api/auth/login/` with consultant credentials.
-2. **Select Organisation:** Call `GET /api/organisations/` to retrieve assigned organisations (e.g., Acme Corp ID `1`).
-3. **Create Project:** Call `POST /api/organisations/1/projects/` with `{"name": "Supply Chain Overhaul"}`. Initial `risk_score` is `0`.
-4. **Add Risk:** Call `POST /api/projects/<project_id>/risks/` with `{"title": "Vendor SLA Breaches", "severity": "high", "status": "open"}`. Project `risk_score` automatically updates to `9`.
-5. **Mitigate Risk:** Call `PATCH /api/risks/<risk_id>/` with `{"status": "mitigating"}`. Project `risk_score` automatically updates to `6`.
-6. **Close Risk:** Call `PATCH /api/risks/<risk_id>/` with `{"status": "closed"}`. Project `risk_score` drops to `0`.
-
-### Client Viewer Workflow
-1. **Login:** Send `POST /api/auth/login/` with client viewer credentials (`viewer.acme@example.com`).
-2. **View Accessible Projects:** Call `GET /api/organisations/1/projects/` to inspect project progress and risk scores.
-3. **View Project Risks:** Call `GET /api/projects/1/risks/` to inspect all identified risks.
-4. **Attempted Modification:** Calling `POST /api/projects/1/risks/` or `PATCH /api/projects/1/` is blocked with `403 Forbidden`.
-5. **Attempted Cross-Tenant Access:** Calling `GET /api/organisations/2/projects/` (Globex) is blocked with `404 Not Found`.
-
----
-
-## Future Scoring Enhancements
-
-1. **Project-Size Normalisation:** Add normalisation to prevent projects with many low-impact risks from scoring artificially higher than small projects with single critical vulnerabilities.
-2. **Historical Score Trends:** Implement daily snapshots and audit logs to chart risk trends over time on dashboards.
-3. **Configurable Organisation Thresholds:** Support tenant-specific RAG (Red/Amber/Green) risk thresholds (e.g., Green: 0-25, Amber: 26-60, Red: 61-100).
-4. **Dynamic Weight Change Recalculation:** When administrators update severity or status weights, trigger asynchronous background recalculation jobs across all projects via Dramatiq.
-
----
-
-## Authentication & JWT Session Management
-
-Engagement Pulse employs an in-memory access token architecture with an `HttpOnly` cookie-backed refresh strategy:
-- **Access Tokens:** Maintained strictly in-memory (`AuthContext` and `apiClient`). Tokens are never persisted to `localStorage` or `sessionStorage`, mitigating XSS credential theft.
-- **Refresh Tokens:** Issued as `HttpOnly`, `SameSite=Lax`, `Path=/api/auth/` cookies by Next.js Backend-For-Frontend (BFF) route handlers (`/api/auth/login`, `/api/auth/refresh`, `/api/auth/logout`), forwarding to Django Simple JWT.
-- **Deduplicated Refresh & Retry:** The API client intercepts `401 Unauthorized` responses and triggers a single in-flight token refresh promise. Concurrent requests awaiting refresh are queued and retried together with the fresh access token, preventing duplicate refresh operations.
-- **Protected Routes & Flashing Prevention:** `AppShell` guards protected routes (`/`) by verifying session state. While verifying, a branded loading spinner is rendered; unauthenticated visitors are redirected to `/login` without exposing protected DOM content. Authenticated visitors visiting `/login` are automatically redirected to `/`.
-- **Cache-Clearing Logout:** The logout action calls `/api/auth/logout/` (purging the cookie), wipes the in-memory access token, clears the entire TanStack React Query cache (`queryClient.clear()`), and navigates to `/login`.
-
----
-
-## Verification & Testing
-
-### Frontend Test Suite (Jest & React Testing Library)
-
-Execute the frontend tests:
-
-```bash
-npm --prefix frontend test
-```
-
-The frontend test suite validates:
-1. In-memory access token storage and header attachment on API requests.
-2. Transparent token refresh on 401 with immediate single-retry.
-3. Concurrent request deduplication ensuring only one refresh request fires across simultaneous failures.
-4. Refresh failure handling with token clearance and authentication failure callback.
-5. Protected route redirection to `/login` for unauthenticated visitors.
-6. Redirection away from `/login` to `/` for authenticated visitors.
-7. Branded loading indicator during authentication check preventing protected content exposure.
-8. Role rendering and organization details for Consultants and Client Viewers.
-9. Complete cache clearance (`queryClient.clear()`) and in-memory wipe upon logout.
-
----
-
-### Backend Test Suite (Pytest)
-
-Execute the complete backend test suite:
-
-```bash
-pytest backend/tests
-```
-
-The test suite validates:
-1. Consultant login, token generation, and multi-organisation visibility.
-2. Client viewer login, token generation, and single-organisation isolation.
-3. Denial of unauthenticated requests (`401 Unauthorized`).
-4. Rejection of cross-organisation access (`404 Not Found`).
-5. Database-level unique constraint enforcement on `(user, organisation)` in `ConsultantOrganisationAccess`.
-6. Idempotency and repeatability of the `seed_data` command.
-7. Project and risk CRUD lifecycles.
-8. Client viewer read-only permission enforcement (`403 Forbidden` on mutation).
-9. Accurate risk scoring formula calculation across multiple risks and edge cases (empty project, capping at 100).
-10. Automatic score recalculation on risk creation, status modification, reopening, and deletion.
-11. Prevention of client-supplied `risk_score` tampering.
-12. Validation of severity and status choices.
-
----
-
-## AI-Assisted Development Disclosure
-
-In accordance with project standards, this milestone was developed with AI assistance from Google Antigravity (Advanced Agentic Coding). Architecture, domain modeling, and test suites adhere strictly to the engineering rules defined in `AGENTS.md`.
+Built with AI-assisted coding using Google Antigravity, with architecture choices, implementation boundaries and verification guided by project instructions in `AGENTS.md`.
