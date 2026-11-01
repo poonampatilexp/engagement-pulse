@@ -90,3 +90,7 @@ npm --prefix frontend test -- --watchAll=false
 ## Development approach
 
 Built with AI-assisted coding using Google Antigravity, with architecture choices, implementation boundaries and verification guided by project instructions in `AGENTS.md`.
+
+## Documents
+
+Find the Architecture and Azure documentation under the docs folder
