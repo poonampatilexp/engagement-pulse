@@ -7,4 +7,7 @@ pytest>=8.3.3
 pytest-django>=4.9.0
 dramatiq[redis]>=1.15.0
 django-dramatiq>=0.11.0
+channels>=4.1.0,<4.4.0
+channels_redis>=4.2.0,<4.4.0
+daphne>=4.1.0,<4.3.0
 

@@ -29,6 +29,7 @@ ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_str.split(',') if host.s
 
 # Application definition
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -36,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Third-party apps
+    'channels',
     'django_dramatiq',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -44,6 +46,8 @@ INSTALLED_APPS = [
     'apps.users.apps.UsersConfig',
     'apps.projects.apps.ProjectsConfig',
 ]
+
+ASGI_APPLICATION = 'config.asgi.application'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -160,6 +164,16 @@ SIMPLE_JWT = {
 
 # Redis configuration
 REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
+
+# Channels configuration
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [REDIS_URL],
+        },
+    },
+}
 
 # Dramatiq configuration
 DRAMATIQ_BROKER = {
