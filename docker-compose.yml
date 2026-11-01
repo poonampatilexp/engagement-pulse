@@ -3,13 +3,18 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: engagement_pulse
-      POSTGRES_USER: pulse_user
-      POSTGRES_PASSWORD: pulse_password
+      POSTGRES_DB: ${DB_NAME:-engagement_pulse}
+      POSTGRES_USER: ${DB_USER:-pulse_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pulse_password}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pulse_user} -d ${DB_NAME:-engagement_pulse}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -18,8 +23,86 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345}
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,backend,frontend
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=${DB_NAME:-engagement_pulse}
+      - DB_USER=${DB_USER:-pulse_user}
+      - DB_PASSWORD=${DB_PASSWORD:-pulse_password}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["worker"]
+    restart: unless-stopped
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345}
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=${DB_NAME:-engagement_pulse}
+      - DB_USER=${DB_USER:-pulse_user}
+      - DB_PASSWORD=${DB_PASSWORD:-pulse_password}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=
+        - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+        - DJANGO_INTERNAL_URL=http://backend:8000
+        - INTERNAL_API_URL=http://backend:8000
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DJANGO_INTERNAL_URL=http://backend:8000
+      - INTERNAL_API_URL=http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_started
 
 volumes:
   postgres_data:
   redis_data:
-
+  media_data:

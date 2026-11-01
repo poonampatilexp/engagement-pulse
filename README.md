@@ -11,42 +11,77 @@ Consultants manage projects and risks for assigned client organisations. Client 
 - **Backend:** Python 3.12, Django 5, Django REST Framework
 - **Database:** PostgreSQL 16 (Django ORM & migrations)
 - **Authentication:** JWT via `djangorestframework-simplejwt`
-- **Background Processing:** Dramatiq with Redis *(Upcoming)*
-- **Real-Time Updates:** Django Channels with `channels_redis` *(Upcoming)*
+- **Background Processing:** Dramatiq with Redis
+- **Real-Time Updates:** Django Channels with `channels_redis` and Daphne ASGI
 - **Frontend:** React 18, Next.js 14 App Router, TypeScript, Material UI (MUI), TanStack React Query
 - **Testing:** pytest, pytest-django, React Testing Library, Playwright
 - **Infrastructure:** Docker Compose
 
 ---
 
-## Local Setup Instructions
+## One-Command Startup (Docker Compose)
 
-### 1. Prerequisites
+### Prerequisites
 
-- Python 3.12+
-- Docker and Docker Compose
+- **Docker Desktop** (or Docker Engine with Docker Compose v2+)
 
-### 2. Environment Configuration
+### Startup
 
-Copy the example environment configuration:
+To build and start all five services with automated database migrations and seeded demo data in a single command:
 
 ```bash
-cp .env.example .env
+docker compose up --build
 ```
 
-Default local `.env` values:
+*(On detached mode: `docker compose up --build -d`)*
 
-```env
-DEBUG=True
-SECRET_KEY=django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345
-ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=engagement_pulse
-DB_USER=pulse_user
-DB_PASSWORD=pulse_password
-DB_HOST=localhost
-DB_PORT=5432
+### Application URLs
+
+- **Frontend Application:** [http://localhost:3000](http://localhost:3000)
+- **Backend API & WebSockets:** [http://localhost:8000](http://localhost:8000) (WebSocket: `ws://localhost:8000/ws/organisations/<id>/updates/`)
+
+### Seeded Demo Logins
+
+All accounts use the password: `Password123!`
+
+| Role | Email | Password | Access Scope |
+| :--- | :--- | :--- | :--- |
+| **Consultant** | `consultant@engagementpulse.com` | `Password123!` | Multi-tenant access to both **Acme Corp** and **Globex Corporation** (Create/Edit risks, CSV upload) |
+| **Client Viewer (Acme)** | `viewer.acme@example.com` | `Password123!` | Read-only access strictly restricted to **Acme Corp** |
+| **Client Viewer (Globex)** | `viewer.globex@example.com` | `Password123!` | Read-only access strictly restricted to **Globex Corporation** |
+
+### How to Stop the Application
+
+```bash
+docker compose down
 ```
+
+### How to Reset Demo Data
+
+To wipe the database volume and re-run migrations and seeding from a clean slate:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+Alternatively, to re-seed without destroying volumes:
+
+```bash
+docker compose exec backend python manage.py seed_data
+```
+
+### Architecture of the Five Services
+
+1. **`db` (PostgreSQL 16):** Persists organisations, users, projects, risks, scoring configurations, and CSV import jobs. Equipped with Docker health checks to prevent startup race conditions.
+2. **`redis` (Redis 7):** In-memory broker powering the Django Channels channel layer, atomic single-use WebSocket connection tickets (`GETDEL`), and the Dramatiq task queue.
+3. **`backend` (Django ASGI / Daphne):** Python 3.12 ASGI service running Daphne on port 8000. Automatically waits for PostgreSQL, applies database migrations, seeds idempotent demo data on startup, and serves REST APIs and WebSockets.
+4. **`worker` (Dramatiq Background Worker):** Dedicated worker container sharing file storage with the backend via `media_data` volume to process CSV import jobs asynchronously and recalculate project risk scores without blocking web requests.
+5. **`frontend` (Next.js 14 App Router):** Production React/TypeScript application running on port 3000. Proxies API requests to `http://backend:8000`, supports HttpOnly refresh cookies, and connects to live WebSocket updates.
+
+---
+
+## Alternative: Manual Local Setup (Without Docker)
 
 ### 3. Start PostgreSQL Database
 

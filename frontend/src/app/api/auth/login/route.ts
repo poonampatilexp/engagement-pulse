@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DJANGO_URL = process.env.DJANGO_INTERNAL_URL || 'http://127.0.0.1:8000';
+const DJANGO_URL = process.env.DJANGO_INTERNAL_URL || process.env.INTERNAL_API_URL || 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
   try {
