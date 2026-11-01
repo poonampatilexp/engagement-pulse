@@ -1,5 +1,5 @@
 import { LoginCredentials, LoginResponse, UserProfile, OrganisationRef } from '@/types/auth';
-import { Project, Risk, UpdateRiskPayload } from '@/types/project';
+import { Project, Risk, UpdateRiskPayload, CSVImportJob } from '@/types/project';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -142,6 +142,7 @@ export async function request<T>(endpoint: string, options: ExtendedRequestInit 
         data?.non_field_errors?.[0] ??
         data?.email?.[0] ??
         data?.password?.[0] ??
+        data?.file?.[0] ??
         STATUS_MESSAGES[response.status] ??
         'An unexpected error occurred. Please try again.';
 
@@ -230,6 +231,23 @@ export const apiClient = {
       return request<Risk>(`/api/risks/${riskId}/`, {
         method: 'PATCH',
         body: JSON.stringify(data),
+      });
+    },
+  },
+
+  csvJobs: {
+    async upload(projectId: number, file: File): Promise<CSVImportJob> {
+      const formData = new FormData();
+      formData.append('file', file);
+      return request<CSVImportJob>(`/api/projects/${projectId}/csv-jobs/`, {
+        method: 'POST',
+        body: formData,
+      });
+    },
+
+    async getStatus(jobId: string): Promise<CSVImportJob> {
+      return request<CSVImportJob>(`/api/csv-jobs/${jobId}/`, {
+        method: 'GET',
       });
     },
   },

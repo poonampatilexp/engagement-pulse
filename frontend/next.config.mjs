@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  optimizeFonts: false,
   skipTrailingSlashRedirect: true,
   async rewrites() {
     return [

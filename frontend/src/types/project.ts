@@ -31,3 +31,24 @@ export interface UpdateRiskPayload {
   owner?: string;
 }
 
+export type CSVJobStatus = 'queued' | 'processing' | 'completed' | 'failed';
+
+export interface CSVImportJob {
+  id: string;
+  job_id: string;
+  project: number;
+  project_name: string;
+  filename: string;
+  status: CSVJobStatus;
+  total_rows: number;
+  processed_rows: number;
+  error_details: {
+    errors?: string[];
+    [key: string]: any;
+  };
+  created_by_email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+

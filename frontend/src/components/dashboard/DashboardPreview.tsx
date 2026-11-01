@@ -35,10 +35,12 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import { apiClient } from '@/lib/api-client';
 import { Project, Risk, RiskSeverity, RiskStatus, UpdateRiskPayload } from '@/types/project';
+import CSVImportDialog from '@/components/dashboard/CSVImportDialog';
 
 function getSeverityChip(severity: RiskSeverity) {
   switch (severity) {
@@ -131,6 +133,20 @@ export default function DashboardPreview() {
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
   const [editFormData, setEditFormData] = useState<UpdateRiskPayload>({});
   const [editError, setEditError] = useState<string | null>(null);
+
+  // State for CSV Import Dialog (Consultants only)
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importProject, setImportProject] = useState<Project | null>(null);
+
+  const handleOpenImportDialog = (project: Project) => {
+    setImportProject(project);
+    setImportDialogOpen(true);
+  };
+
+  const handleCloseImportDialog = () => {
+    setImportDialogOpen(false);
+    setImportProject(null);
+  };
 
   // Mutation to update risk
   const updateRiskMutation = useMutation({
@@ -359,6 +375,11 @@ export default function DashboardPreview() {
                   <TableCell sx={{ fontWeight: 700, color: '#475569', fontSize: '0.8rem', textTransform: 'uppercase' }}>
                     Open Risks Count
                   </TableCell>
+                  {isConsultant && (
+                    <TableCell align="right" sx={{ fontWeight: 700, color: '#475569', fontSize: '0.8rem', textTransform: 'uppercase' }}>
+                      Actions
+                    </TableCell>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -415,6 +436,22 @@ export default function DashboardPreview() {
                           }}
                         />
                       </TableCell>
+
+                      {/* Column 4: Actions (Consultants only) */}
+                      {isConsultant && (
+                        <TableCell align="right" sx={{ py: 2 }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<UploadFileRoundedIcon fontSize="small" />}
+                            onClick={() => handleOpenImportDialog(project)}
+                            data-testid={`import-csv-btn-${project.id}`}
+                            sx={{ fontSize: '0.75rem', py: 0.5, px: 1.25, textTransform: 'none', fontWeight: 600 }}
+                          >
+                            Import CSV
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -605,6 +642,15 @@ export default function DashboardPreview() {
           </DialogActions>
         </Box>
       </Dialog>
+
+      {/* 5. CSV Import Dialog (Consultants only) */}
+      {isConsultant && (
+        <CSVImportDialog
+          open={importDialogOpen}
+          onClose={handleCloseImportDialog}
+          project={importProject}
+        />
+      )}
     </Box>
   );
 }
