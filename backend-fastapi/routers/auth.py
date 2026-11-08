@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
+from dependencies import get_current_user
 import models
 from security import create_access_token, verify_password
 
@@ -18,6 +19,14 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -36,3 +45,7 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(user.id)
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: models.User = Depends(get_current_user)):
+    return current_user
