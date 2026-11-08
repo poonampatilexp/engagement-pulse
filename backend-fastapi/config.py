@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # Development-only seed credentials (read from environment/.env, never hardcoded)
+    SEED_CONSULTANT_PASSWORD: str | None = None
+    SEED_CLIENT_VIEWER_PASSWORD: str | None = None
+    SEED_PASSWORD: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

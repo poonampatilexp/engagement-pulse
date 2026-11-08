@@ -67,7 +67,22 @@ alembic downgrade -1
 alembic revision --autogenerate -m "describe changes"
 ```
 
-### 6. Run Development Server
+### 6. Seed Development Data
+
+Populate initial development organisations, a consultant user, and client viewers idempotently:
+
+```bash
+python seed.py
+```
+
+Seeded demo users:
+- **Consultant:** `consultant@engagementpulse.com` (assigned to Acme Health & Beta Care)
+- **Client Viewer (Acme Health):** `viewer.acme@example.com`
+- **Client Viewer (Beta Care):** `viewer.beta@example.com`
+
+Passwords are read from `SEED_CONSULTANT_PASSWORD` and `SEED_CLIENT_VIEWER_PASSWORD` in `.env`.
+
+### 7. Run Development Server
 
 ```bash
 uvicorn main:app --reload --host 127.0.0.1 --port 8000
@@ -79,7 +94,7 @@ Or run directly via python:
 python main.py
 ```
 
-### 7. Verify Endpoints
+### 8. Verify Endpoints
 
 - **Health Check:** [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) -> `{"status": "ok"}`
 - **Login Endpoint:** `POST http://127.0.0.1:8000/auth/login` -> `{"access_token": "...", "token_type": "bearer"}`
