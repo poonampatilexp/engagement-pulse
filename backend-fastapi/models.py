@@ -1,6 +1,17 @@
 from datetime import datetime
 import enum
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, UniqueConstraint, func, text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -9,6 +20,19 @@ from database import Base
 class UserRole(str, enum.Enum):
     CONSULTANT = "consultant"
     CLIENT_VIEWER = "client_viewer"
+
+
+class RiskSeverity(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class RiskStatus(str, enum.Enum):
+    OPEN = "open"
+    MITIGATING = "mitigating"
+    CLOSED = "closed"
 
 
 class Organisation(Base):
@@ -157,6 +181,57 @@ class Project(Base):
         "Organisation",
         back_populates="projects",
     )
+    risks: Mapped[list["Risk"]] = relationship(
+        "Risk",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Project id={self.id} name='{self.name}' risk_score={self.risk_score}>"
+
+
+class Risk(Base):
+    __tablename__ = "risks"
+    __table_args__ = (
+        CheckConstraint(
+            "severity IN ('low', 'medium', 'high', 'critical')",
+            name="check_risk_severity_valid",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'mitigating', 'closed')",
+            name="check_risk_status_valid",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="medium")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    owner: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    project: Mapped["Project"] = relationship(
+        "Project",
+        back_populates="risks",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Risk id={self.id} title='{self.title}' severity='{self.severity}' status='{self.status}'>"
