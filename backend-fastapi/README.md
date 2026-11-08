@@ -100,5 +100,9 @@ python main.py
 - **Login Endpoint:** `POST http://127.0.0.1:8000/auth/login` -> `{"access_token": "...", "token_type": "bearer"}`
 - **Authenticated User:** `GET http://127.0.0.1:8000/auth/me` (requires `Authorization: Bearer <token>`) -> `{"id": ..., "email": "...", "role": "..."}`
 - **Accessible Organisations:** `GET http://127.0.0.1:8000/organisations` (requires `Authorization: Bearer <token>`) -> `[{"id": ..., "name": "...", "slug": "..."}]`
+- **Projects List:** `GET http://127.0.0.1:8000/projects` (requires `Authorization: Bearer <token>`) -> `[{"id": ..., "name": "...", "organisation_id": ..., "risk_score": ...}]`
+- **Project Detail:** `GET http://127.0.0.1:8000/projects/{project_id}` (requires `Authorization: Bearer <token>`)
+- **Create Project:** `POST http://127.0.0.1:8000/projects` (consultant only; requires `name`, `organisation_id`)
+- **Update Project:** `PATCH http://127.0.0.1:8000/projects/{project_id}` (consultant only; update `name`)
 - **Interactive Swagger Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
