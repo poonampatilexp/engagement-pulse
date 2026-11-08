@@ -33,9 +33,11 @@ describe('Protected Routes & Session Guard', () => {
 
   const renderWithProviders = (ui: React.ReactNode) => {
     return render(
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>{ui}</AuthProvider>
-      </QueryClientProvider>
+      <React.StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>{ui}</AuthProvider>
+        </QueryClientProvider>
+      </React.StrictMode>
     );
   };
 

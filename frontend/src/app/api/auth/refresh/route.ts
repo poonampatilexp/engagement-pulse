@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ refresh: refreshToken }),
+      body: JSON.stringify({ refresh: refreshToken, refresh_token: refreshToken }),
     });
 
     let data: any = null;
@@ -52,8 +52,24 @@ export async function POST(request: NextRequest) {
       return errorResponse;
     }
 
-    // 3. Return fresh access token
-    return NextResponse.json(data);
+    // 3. Return fresh access token and persist rotated refresh token
+    const nextRefreshToken = data.refresh || data.refresh_token;
+    const response = NextResponse.json({
+      access: data.access || data.access_token,
+      ...data,
+    });
+
+    if (nextRefreshToken) {
+      response.cookies.set('refresh_token', nextRefreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth/',
+        maxAge: 7 * 24 * 60 * 60,
+      });
+    }
+
+    return response;
   } catch (error) {
     const errorResponse = NextResponse.json(
       { detail: 'Failed to communicate with authentication service' },

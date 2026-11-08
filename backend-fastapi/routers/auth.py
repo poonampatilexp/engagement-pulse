@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+import jwt
 from pydantic import BaseModel, ConfigDict, computed_field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +7,12 @@ from sqlalchemy.orm import Session
 from database import get_db
 from dependencies import get_current_user
 import models
-from security import create_access_token, verify_password
+from security import (
+    create_access_token,
+    create_refresh_token,
+    decode_refresh_token,
+    verify_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -42,12 +48,53 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    refresh_token: str | None = None
     user: UserResponse | None = None
 
     @computed_field
     @property
     def access(self) -> str:
         return self.access_token
+
+    @computed_field
+    @property
+    def refresh(self) -> str | None:
+        return self.refresh_token
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh: str | None = None
+    refresh_token: str | None = None
+
+    def get_token(self) -> str:
+        token = self.refresh or self.refresh_token
+        if not token or not token.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refresh token is required",
+            )
+        return token.strip()
+
+
+class RefreshTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    refresh_token: str | None = None
+
+    @computed_field
+    @property
+    def access(self) -> str:
+        return self.access_token
+
+    @computed_field
+    @property
+    def refresh(self) -> str | None:
+        return self.refresh_token
+
+
+class LogoutRequest(BaseModel):
+    refresh: str | None = None
+    refresh_token: str | None = None
 
 
 def build_user_response(user: models.User, db: Session) -> UserResponse:
@@ -95,11 +142,68 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
     user_resp = build_user_response(user, db)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
+        "refresh_token": refresh_token,
         "user": user_resp,
+    }
+
+
+@router.post("/refresh", response_model=RefreshTokenResponse)
+@router.post("/refresh/", response_model=RefreshTokenResponse, include_in_schema=False)
+def refresh_token_endpoint(
+    payload: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    raw_token = payload.get_token()
+
+    try:
+        decoded = decode_refresh_token(raw_token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id_val = decoded.get("sub") or decoded.get("user_id")
+    try:
+        user_id = int(user_id_val)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token claims",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.execute(
+        select(models.User).where(models.User.id == user_id)
+    ).scalar_one_or_none()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is inactive or not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    new_access_token = create_access_token(user.id)
+    new_refresh_token = create_refresh_token(user.id)
+
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer",
+        "refresh_token": new_refresh_token,
     }
 
 
@@ -114,6 +218,6 @@ def get_me(
 
 @router.post("/logout")
 @router.post("/logout/", include_in_schema=False)
-def logout():
+def logout(payload: LogoutRequest | None = None):
     return {"success": True}
 

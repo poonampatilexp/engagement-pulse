@@ -18,12 +18,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(data, { status: res.status });
     }
 
-    const { access, refresh, user } = data;
-    const response = NextResponse.json({ access, user });
+    const accessToken = data.access || data.access_token;
+    const refreshToken = data.refresh || data.refresh_token;
+    const user = data.user;
+    const response = NextResponse.json({ access: accessToken, user });
 
     // Store refresh token strictly in HttpOnly cookie if provided
-    if (refresh) {
-      response.cookies.set('refresh_token', refresh, {
+    if (refreshToken) {
+      response.cookies.set('refresh_token', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

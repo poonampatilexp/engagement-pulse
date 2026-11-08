@@ -27,7 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   const isLoginPage = pathname === '/login' || pathname === '/login/';
-  const hasInitialized = useRef(false);
+  const initPromiseRef = useRef<Promise<void> | null>(null);
+  const isMountedRef = useRef(true);
 
   // In-memory authentication state (never stored in localStorage or sessionStorage)
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -59,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore network errors during logout
     } finally {
-      hasInitialized.current = false;
+      initPromiseRef.current = null;
       setAccessToken(null);
       setUser(null);
       setSelectedOrganisationState(null);
@@ -130,18 +131,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [accessToken, user]);
 
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
 
     // Register global callbacks for the API client
     apiClient.setOnTokenRefreshed((newToken) => {
-      if (isMounted) {
+      if (isMountedRef.current) {
         setAccessToken(newToken);
       }
     });
 
     apiClient.setOnAuthFailure(() => {
-      if (isMounted) {
-        hasInitialized.current = false;
+      if (isMountedRef.current) {
+        initPromiseRef.current = null;
         setAccessToken(null);
         setUser(null);
         setSelectedOrganisationState(null);
@@ -160,30 +161,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // If already authenticated or initialized, do not re-run restoration
-      if (hasInitialized.current || (accessToken && user)) {
+      // If already authenticated, do not re-run restoration
+      if (accessToken && user) {
         setIsLoading(false);
         return;
       }
 
-      hasInitialized.current = true;
+      if (!initPromiseRef.current) {
+        initPromiseRef.current = (async () => {
+          try {
+            const { access } = await apiClient.auth.refreshToken(undefined, { notifyOnFailure: false });
+            if (!isMountedRef.current) return;
+            setAccessToken(access);
+            apiClient.setAccessToken(access);
 
-      try {
-        const { access } = await apiClient.auth.refreshToken(undefined, { notifyOnFailure: false });
-        if (!isMounted) return;
-        setAccessToken(access);
-        apiClient.setAccessToken(access);
+            const profile = await apiClient.auth.getMe();
+            if (!isMountedRef.current) return;
+            setUser(profile);
+          } catch {
+            if (!isMountedRef.current) return;
+            setAccessToken(null);
+            setUser(null);
+            setSelectedOrganisationState(null);
+            setAvailableOrganisations([]);
+            apiClient.setAccessToken(null);
+          } finally {
+            if (isMountedRef.current) {
+              setIsLoading(false);
+            }
+          }
+        })();
+      }
 
-        const profile = await apiClient.auth.getMe();
-        if (!isMounted) return;
-        setUser(profile);
-      } catch {
-        setAccessToken(null);
-        setUser(null);
-        setSelectedOrganisationState(null);
-        setAvailableOrganisations([]);
-        apiClient.setAccessToken(null);
-      } finally {
+      await initPromiseRef.current;
+      if (isMountedRef.current) {
         setIsLoading(false);
       }
     };
@@ -191,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       apiClient.setOnTokenRefreshed(null);
       apiClient.setOnAuthFailure(null);
     };
