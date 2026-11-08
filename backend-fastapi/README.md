@@ -99,5 +99,6 @@ python main.py
 - **Health Check:** [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) -> `{"status": "ok"}`
 - **Login Endpoint:** `POST http://127.0.0.1:8000/auth/login` -> `{"access_token": "...", "token_type": "bearer"}`
 - **Authenticated User:** `GET http://127.0.0.1:8000/auth/me` (requires `Authorization: Bearer <token>`) -> `{"id": ..., "email": "...", "role": "..."}`
+- **Accessible Organisations:** `GET http://127.0.0.1:8000/organisations` (requires `Authorization: Bearer <token>`) -> `[{"id": ..., "name": "...", "slug": "..."}]`
 - **Interactive Swagger Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
