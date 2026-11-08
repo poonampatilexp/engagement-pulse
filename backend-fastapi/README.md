@@ -82,5 +82,6 @@ python main.py
 ### 7. Verify Endpoints
 
 - **Health Check:** [http://127.0.0.1:8000/health](http://127.0.0.1:8000/health) -> `{"status": "ok"}`
+- **Login Endpoint:** `POST http://127.0.0.1:8000/auth/login` -> `{"access_token": "...", "token_type": "bearer"}`
 - **Interactive Swagger Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
