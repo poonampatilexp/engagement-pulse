@@ -1,5 +1,6 @@
 import os
 import sys
+from contextlib import asynccontextmanager
 
 # Ensure backend-fastapi directory is in Python path for standalone executions
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -11,11 +12,24 @@ from routers.organisations import router as organisations_router
 from routers.projects import router as projects_router
 from routers.risks import router as risks_router
 from routers.csv_jobs import router as csv_jobs_router
+from routers.websocket import router as websocket_router
+from websocket_manager import connection_manager
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Start background Redis Pub/Sub listener for real-time live updates
+    await connection_manager.start_redis_listener()
+    yield
+    # Shutdown: Cleanly stop Redis listener
+    await connection_manager.stop_redis_listener()
+
 
 app = FastAPI(
     title="Engagement Pulse API",
     description="FastAPI backend for Engagement Pulse engagement risk management",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Configure CORS for local Next.js frontend
@@ -39,12 +53,14 @@ app.include_router(organisations_router)
 app.include_router(projects_router)
 app.include_router(risks_router)
 app.include_router(csv_jobs_router)
+app.include_router(websocket_router)
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(organisations_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
 app.include_router(risks_router, prefix="/api")
 app.include_router(csv_jobs_router, prefix="/api")
+app.include_router(websocket_router, prefix="/api")
 
 
 @app.get("/health")

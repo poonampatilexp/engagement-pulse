@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
-function getWebSocketBaseUrl(): string {
+export function getWebSocketBaseUrl(loc?: { protocol?: string; hostname?: string; port?: string; host?: string }): string {
   if (process.env.NEXT_PUBLIC_WS_URL) {
     return process.env.NEXT_PUBLIC_WS_URL.replace(/\/+$/, '');
   }
@@ -13,11 +13,15 @@ function getWebSocketBaseUrl(): string {
     const host = process.env.NEXT_PUBLIC_API_URL.replace(/^https?:\/\//, '').replace(/\/+$/, '');
     return `${wsProto}//${host}`;
   }
-  if (typeof window !== 'undefined') {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.port === '3000'
-      ? `${window.location.hostname}:8000`
-      : window.location.host;
+  const targetLoc = loc || (typeof window !== 'undefined' ? window.location : null);
+  if (targetLoc) {
+    const proto = targetLoc.protocol === 'https:' ? 'wss:' : 'ws:';
+    // In local development, the frontend runs on port 3000, 3001, etc. while the backend WebSocket is on port 8000
+    const hostname = targetLoc.hostname || 'localhost';
+    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+    const host = isLocalDev && targetLoc.port !== '8000'
+      ? `${hostname}:8000`
+      : (targetLoc.host || `${hostname}:${targetLoc.port || ''}`);
     return `${proto}//${host}`;
   }
   return 'ws://127.0.0.1:8000';

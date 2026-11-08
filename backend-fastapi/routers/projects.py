@@ -8,6 +8,7 @@ from database import get_db
 from dependencies import get_current_user
 import models
 from permissions import can_access_organisation, can_edit_organisation
+from broadcast_service import BroadcastService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -126,6 +127,13 @@ def create_project(
     db.add(project)
     db.commit()
     db.refresh(project)
+
+    BroadcastService.broadcast_data_changed(
+        organisation_id=project.organisation_id,
+        project_id=project.id,
+        reason="project_created",
+    )
+
     return project
 
 
@@ -164,5 +172,12 @@ def update_project(
     project.name = payload.name.strip()
     db.commit()
     db.refresh(project)
+
+    BroadcastService.broadcast_data_changed(
+        organisation_id=project.organisation_id,
+        project_id=project.id,
+        reason="project_updated",
+    )
+
     return project
 

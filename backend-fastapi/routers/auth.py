@@ -221,3 +221,36 @@ def get_me(
 def logout(payload: LogoutRequest | None = None):
     return {"success": True}
 
+
+class WebSocketTicketResponse(BaseModel):
+    ticket: str
+    expires_in: int = 30
+
+
+@router.post(
+    "/ws-ticket",
+    response_model=WebSocketTicketResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/ws-ticket/",
+    response_model=WebSocketTicketResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+def get_websocket_ticket(
+    current_user: models.User = Depends(get_current_user),
+):
+    """Generates a short-lived single-use ticket for WebSocket authentication.
+    
+    Used by /ws/organisations/{org_id}/ to authenticate without exposing long-lived JWTs.
+    """
+    from ws_ticket_service import WebSocketTicketService
+
+    ticket = WebSocketTicketService.create_ticket(current_user.id)
+    return {
+        "ticket": ticket,
+        "expires_in": WebSocketTicketService.TICKET_TTL,
+    }
+
+

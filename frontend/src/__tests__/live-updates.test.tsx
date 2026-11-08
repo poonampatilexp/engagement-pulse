@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useOrganisationUpdates } from '@/hooks/useOrganisationUpdates';
+import { useOrganisationUpdates, getWebSocketBaseUrl } from '@/hooks/useOrganisationUpdates';
 import { apiClient } from '@/lib/api-client';
 
 class MockWebSocket {
@@ -156,6 +156,17 @@ describe('Live Dashboard Updates & WebSocket Hook', () => {
     expect(MockWebSocket.instances.length).toBe(2);
 
     jest.useRealTimers();
+  });
+
+  it('resolves backend WebSocket URL to port 8000 when frontend runs on port 3001 or 3000', () => {
+    expect(getWebSocketBaseUrl({ protocol: 'http:', hostname: 'localhost', port: '3001', host: 'localhost:3001' }))
+      .toBe('ws://localhost:8000');
+    expect(getWebSocketBaseUrl({ protocol: 'http:', hostname: 'localhost', port: '3000', host: 'localhost:3000' }))
+      .toBe('ws://localhost:8000');
+    expect(getWebSocketBaseUrl({ protocol: 'http:', hostname: '127.0.0.1', port: '3001', host: '127.0.0.1:3001' }))
+      .toBe('ws://127.0.0.1:8000');
+    expect(getWebSocketBaseUrl({ protocol: 'https:', hostname: 'pulse.example.com', port: '443', host: 'pulse.example.com' }))
+      .toBe('wss://pulse.example.com');
   });
 });
 

@@ -9,6 +9,7 @@ from dependencies import get_current_user
 import models
 from permissions import can_access_organisation, can_edit_organisation
 from scoring_service import ScoringConfigurationError, recalculate_project_score
+from broadcast_service import BroadcastService
 
 router = APIRouter(tags=["risks"])
 
@@ -139,6 +140,13 @@ def create_project_risk(
 
     db.commit()
     db.refresh(risk)
+
+    BroadcastService.broadcast_data_changed(
+        organisation_id=project.organisation_id,
+        project_id=project.id,
+        reason="risk_created",
+    )
+
     return risk
 
 
@@ -201,5 +209,12 @@ def update_risk(
 
     db.commit()
     db.refresh(risk)
+
+    BroadcastService.broadcast_data_changed(
+        organisation_id=project.organisation_id,
+        project_id=project.id,
+        reason="risk_updated",
+    )
+
     return risk
 

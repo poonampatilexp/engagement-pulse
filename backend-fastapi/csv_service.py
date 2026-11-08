@@ -264,6 +264,14 @@ class CSVImportJobService:
                 db.commit()
                 db.refresh(job)
 
+                from broadcast_service import BroadcastService
+
+                BroadcastService.broadcast_data_changed(
+                    organisation_id=project.organisation_id,
+                    project_id=project.id,
+                    reason="csv_imported",
+                )
+
                 return job
 
             except Exception as exc:
