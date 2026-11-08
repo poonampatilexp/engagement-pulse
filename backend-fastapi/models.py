@@ -42,6 +42,12 @@ class Organisation(Base):
         secondary="consultant_organisation_access",
         back_populates="assigned_organisations",
     )
+    # Projects belonging to this organisation
+    projects: Mapped[list["Project"]] = relationship(
+        "Project",
+        back_populates="organisation",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<Organisation id={self.id} name='{self.name}'>"
@@ -110,3 +116,47 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email='{self.email}' role='{self.role}'>"
+
+
+class Project(Base):
+    __tablename__ = "projects"
+    __table_args__ = (
+        CheckConstraint(
+            "risk_score >= 0 AND risk_score <= 100",
+            name="check_project_risk_score_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    organisation_id: Mapped[int] = mapped_column(
+        ForeignKey("organisations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    risk_score: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    organisation: Mapped["Organisation"] = relationship(
+        "Organisation",
+        back_populates="projects",
+    )
+
+    def __repr__(self) -> str:
+        return f"<Project id={self.id} name='{self.name}' risk_score={self.risk_score}>"
