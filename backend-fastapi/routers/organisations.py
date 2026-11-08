@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,6 +7,7 @@ from database import get_db
 from dependencies import get_current_user
 import models
 from permissions import can_access_organisation
+from routers.projects import ProjectResponse
 
 router = APIRouter(prefix="/organisations", tags=["organisations"])
 
@@ -55,4 +56,26 @@ def list_organisations(
 
     # Filter through organisation permission check
     return [org for org in orgs if can_access_organisation(current_user, org.id, db=db)]
+
+
+@router.get("/{organisation_id}/projects", response_model=list[ProjectResponse])
+@router.get("/{organisation_id}/projects/", response_model=list[ProjectResponse], include_in_schema=False)
+def list_organisation_projects(
+    organisation_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve projects belonging to a specific organisation if accessible."""
+    if not can_access_organisation(current_user, organisation_id, db=db):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organisation not found",
+        )
+
+    projects = db.execute(
+        select(models.Project)
+        .where(models.Project.organisation_id == organisation_id)
+        .order_by(models.Project.id)
+    ).scalars().all()
+    return projects
 

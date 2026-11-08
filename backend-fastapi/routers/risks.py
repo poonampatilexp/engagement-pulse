@@ -1,6 +1,6 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -24,6 +24,11 @@ class RiskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    @computed_field
+    @property
+    def project(self) -> int:
+        return self.project_id
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -44,6 +49,7 @@ class RiskUpdateRequest(BaseModel):
 
 
 @router.get("/projects/{project_id}/risks", response_model=list[RiskResponse])
+@router.get("/projects/{project_id}/risks/", response_model=list[RiskResponse], include_in_schema=False)
 def list_project_risks(
     project_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -74,6 +80,12 @@ def list_project_risks(
     "/projects/{project_id}/risks",
     response_model=RiskResponse,
     status_code=status.HTTP_201_CREATED,
+)
+@router.post(
+    "/projects/{project_id}/risks/",
+    response_model=RiskResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
 )
 def create_project_risk(
     project_id: int,
@@ -131,6 +143,7 @@ def create_project_risk(
 
 
 @router.patch("/risks/{risk_id}", response_model=RiskResponse)
+@router.patch("/risks/{risk_id}/", response_model=RiskResponse, include_in_schema=False)
 def update_risk(
     risk_id: int,
     payload: RiskUpdateRequest,

@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routers.auth import router as auth_router
 from routers.organisations import router as organisations_router
 from routers.projects import router as projects_router
@@ -16,10 +17,31 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Configure CORS for local Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Register endpoints with and without /api prefix for compatibility
 app.include_router(auth_router)
 app.include_router(organisations_router)
 app.include_router(projects_router)
 app.include_router(risks_router)
+
+app.include_router(auth_router, prefix="/api")
+app.include_router(organisations_router, prefix="/api")
+app.include_router(projects_router, prefix="/api")
+app.include_router(risks_router, prefix="/api")
 
 
 @app.get("/health")

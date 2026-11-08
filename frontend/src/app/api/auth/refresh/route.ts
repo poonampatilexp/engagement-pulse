@@ -32,7 +32,12 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({ refresh: refreshToken }),
     });
 
-    const data = await res.json();
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      data = { detail: res.statusText || 'Authentication service error' };
+    }
 
     if (!res.ok) {
       // If refresh fails (e.g. token expired, blacklisted, or invalid), purge cookie
@@ -50,10 +55,18 @@ export async function POST(request: NextRequest) {
     // 3. Return fresh access token
     return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json(
+    const errorResponse = NextResponse.json(
       { detail: 'Failed to communicate with authentication service' },
       { status: 500 }
     );
+    errorResponse.cookies.set('refresh_token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/api/auth/',
+      maxAge: 0,
+    });
+    return errorResponse;
   }
 }
 

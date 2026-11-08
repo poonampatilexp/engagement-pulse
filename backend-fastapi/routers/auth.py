@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,20 +16,72 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class OrganisationRef(BaseModel):
+    id: int
+    name: str
+    slug: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserResponse(BaseModel):
     id: int
     email: str
     role: str
+    organisation: OrganisationRef | None = None
+    organisations: list[OrganisationRef] | None = None
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.email.split("@")[0].replace(".", " ").title()
 
     model_config = ConfigDict(from_attributes=True)
 
 
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse | None = None
+
+    @computed_field
+    @property
+    def access(self) -> str:
+        return self.access_token
+
+
+def build_user_response(user: models.User, db: Session) -> UserResponse:
+    org_ref = None
+    orgs_ref = None
+    if user.role == models.UserRole.CLIENT_VIEWER.value and user.organisation_id:
+        org = db.execute(
+            select(models.Organisation).where(models.Organisation.id == user.organisation_id)
+        ).scalar_one_or_none()
+        if org:
+            org_ref = OrganisationRef.model_validate(org)
+    elif user.role == models.UserRole.CONSULTANT.value:
+        assigned = db.execute(
+            select(models.Organisation)
+            .join(
+                models.ConsultantOrganisationAccess,
+                models.ConsultantOrganisationAccess.organisation_id == models.Organisation.id,
+            )
+            .where(models.ConsultantOrganisationAccess.user_id == user.id)
+            .order_by(models.Organisation.id)
+        ).scalars().all()
+        orgs_ref = [OrganisationRef.model_validate(o) for o in assigned]
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        organisation=org_ref,
+        organisations=orgs_ref,
+    )
+
+
 @router.post("/login", response_model=TokenResponse)
+@router.post("/login/", response_model=TokenResponse, include_in_schema=False)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     user = db.execute(
         select(models.User).where(models.User.email == credentials.email)
@@ -43,9 +95,25 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         )
 
     access_token = create_access_token(user.id)
-    return {"access_token": access_token, "token_type": "bearer"}
+    user_resp = build_user_response(user, db)
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user_resp,
+    }
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(current_user: models.User = Depends(get_current_user)):
-    return current_user
+@router.get("/me/", response_model=UserResponse, include_in_schema=False)
+def get_me(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return build_user_response(current_user, db)
+
+
+@router.post("/logout")
+@router.post("/logout/", include_in_schema=False)
+def logout():
+    return {"success": True}
+

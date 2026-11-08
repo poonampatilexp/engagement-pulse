@@ -21,14 +21,24 @@ export async function POST(request: NextRequest) {
     const { access, refresh, user } = data;
     const response = NextResponse.json({ access, user });
 
-    // Store refresh token strictly in HttpOnly cookie
-    response.cookies.set('refresh_token', refresh, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/auth/',
-      maxAge: 7 * 24 * 60 * 60, // 7 days (matches backend lifetime)
-    });
+    // Store refresh token strictly in HttpOnly cookie if provided
+    if (refresh) {
+      response.cookies.set('refresh_token', refresh, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth/',
+        maxAge: 7 * 24 * 60 * 60, // 7 days (matches backend lifetime)
+      });
+    } else {
+      response.cookies.set('refresh_token', '', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/api/auth/',
+        maxAge: 0,
+      });
+    }
 
     return response;
   } catch (error) {

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { UserProfile, LoginResponse, OrganisationRef } from '@/types/auth';
 import { apiClient } from '@/lib/api-client';
@@ -23,12 +23,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const queryClient = useQueryClient();
+
+  const isLoginPage = pathname === '/login' || pathname === '/login/';
+  const hasInitialized = useRef(false);
 
   // In-memory authentication state (never stored in localStorage or sessionStorage)
   const [user, setUser] = useState<UserProfile | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !isLoginPage);
   const [selectedOrganisation, setSelectedOrganisationState] = useState<OrganisationRef | null>(null);
   const [availableOrganisations, setAvailableOrganisations] = useState<OrganisationRef[]>([]);
 
@@ -55,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // Ignore network errors during logout
     } finally {
+      hasInitialized.current = false;
       setAccessToken(null);
       setUser(null);
       setSelectedOrganisationState(null);
@@ -136,6 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     apiClient.setOnAuthFailure(() => {
       if (isMounted) {
+        hasInitialized.current = false;
         setAccessToken(null);
         setUser(null);
         setSelectedOrganisationState(null);
@@ -148,8 +154,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Session restoration on initial mount (browser refresh or initial visit)
     const initAuth = async () => {
+      // Do not make unnecessary refresh requests when opening /login directly
+      if (isLoginPage) {
+        setIsLoading(false);
+        return;
+      }
+
+      // If already authenticated or initialized, do not re-run restoration
+      if (hasInitialized.current || (accessToken && user)) {
+        setIsLoading(false);
+        return;
+      }
+
+      hasInitialized.current = true;
+
       try {
-        const { access } = await apiClient.auth.refreshToken();
+        const { access } = await apiClient.auth.refreshToken(undefined, { notifyOnFailure: false });
         if (!isMounted) return;
         setAccessToken(access);
         apiClient.setAccessToken(access);
@@ -158,17 +178,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted) return;
         setUser(profile);
       } catch {
-        if (isMounted) {
-          setAccessToken(null);
-          setUser(null);
-          setSelectedOrganisationState(null);
-          setAvailableOrganisations([]);
-          apiClient.setAccessToken(null);
-        }
+        setAccessToken(null);
+        setUser(null);
+        setSelectedOrganisationState(null);
+        setAvailableOrganisations([]);
+        apiClient.setAccessToken(null);
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 

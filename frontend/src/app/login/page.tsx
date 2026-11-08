@@ -96,7 +96,7 @@ export default function LoginPage() {
 
   const handleFillDemo = (demoEmail: string) => {
     setEmail(demoEmail);
-    setPassword('Password123!');
+    setPassword('');
     setEmailError('');
     setPasswordError('');
     setErrorMessage(null);
@@ -278,7 +278,7 @@ export default function LoginPage() {
             >
               <Box>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F172A', display: 'block' }}>
-                  Consultant (Alice)
+                  Consultant
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   consultant@engagementpulse.com
@@ -314,7 +314,7 @@ export default function LoginPage() {
             >
               <Box>
                 <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F172A', display: 'block' }}>
-                  Client Viewer (Bob)
+                  Client Viewer (Acme Health)
                 </Typography>
                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                   viewer.acme@example.com
@@ -325,6 +325,42 @@ export default function LoginPage() {
                 size="small"
                 clickable
                 onClick={() => handleFillDemo('viewer.acme@example.com')}
+                sx={{
+                  fontWeight: 600,
+                  fontSize: '0.7rem',
+                  bgcolor: '#F1F5F9',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                }}
+              />
+            </Box>
+
+            <Box
+              sx={{
+                p: 1.25,
+                borderRadius: 2,
+                border: '1px solid #E2E8F0',
+                backgroundColor: '#FFFFFF',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                transition: 'all 0.15s',
+                '&:hover': { borderColor: 'primary.light', bgcolor: '#FFF7ED' },
+              }}
+            >
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: '#0F172A', display: 'block' }}>
+                  Client Viewer (Beta Care)
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  viewer.beta@example.com
+                </Typography>
+              </Box>
+              <Chip
+                label="Auto-fill"
+                size="small"
+                clickable
+                onClick={() => handleFillDemo('viewer.beta@example.com')}
                 sx={{
                   fontWeight: 600,
                   fontSize: '0.7rem',

@@ -84,20 +84,29 @@ describe('Protected Routes & Session Guard', () => {
   test('redirects authenticated user away from /login to /', async () => {
     (usePathname as jest.Mock).mockReturnValue('/login');
 
-    // Simulate successful session restoration
-    jest.spyOn(apiClient.auth, 'refreshToken').mockResolvedValue({ access: 'valid-token' });
-    jest.spyOn(apiClient.auth, 'getMe').mockResolvedValue({
-      id: 1,
-      name: 'Alice Consultant',
-      email: 'consultant@engagementpulse.com',
-      role: 'consultant',
-      organisation: null,
-      organisations: [{ id: 1, name: 'Acme Corp', slug: 'acme' }],
-    });
+    function AuthenticatedUserOnLogin() {
+      const { login } = useAuth();
+      React.useEffect(() => {
+        login({
+          access: 'valid-token',
+          refresh: '',
+          user: {
+            id: 1,
+            name: 'Alice Consultant',
+            email: 'consultant@engagementpulse.com',
+            role: 'consultant',
+            organisation: null,
+            organisations: [{ id: 1, name: 'Acme Corp', slug: 'acme' }],
+          },
+        });
+      }, [login]);
+
+      return <div data-testid="login-form">Login Page Form</div>;
+    }
 
     renderWithProviders(
       <AppShell>
-        <div data-testid="login-form">Login Page Form</div>
+        <AuthenticatedUserOnLogin />
       </AppShell>
     );
 
@@ -108,10 +117,10 @@ describe('Protected Routes & Session Guard', () => {
     expect(screen.queryByTestId('login-form')).not.toBeInTheDocument();
   });
 
-  test('allows unauthenticated user to view /login page', async () => {
+  test('direct /login navigation makes zero refresh requests and allows viewing login page', async () => {
     (usePathname as jest.Mock).mockReturnValue('/login');
 
-    jest.spyOn(apiClient.auth, 'refreshToken').mockRejectedValue(new Error('No cookie'));
+    const refreshTokenSpy = jest.spyOn(apiClient.auth, 'refreshToken');
 
     renderWithProviders(
       <AppShell>
@@ -123,7 +132,54 @@ describe('Protected Routes & Session Guard', () => {
       expect(screen.getByTestId('login-form')).toBeInTheDocument();
     });
 
+    expect(refreshTokenSpy).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  test('successful login sets authenticated state and navigates to dashboard', async () => {
+    (usePathname as jest.Mock).mockReturnValue('/login');
+
+    let capturedLogin: ((data: any) => void) | null = null;
+    function LoginSimulationComponent() {
+      const { login, isAuthenticated } = useAuth();
+      capturedLogin = login;
+      return (
+        <div>
+          {isAuthenticated ? (
+            <div data-testid="authenticated-view">Authenticated Dashboard</div>
+          ) : (
+            <div data-testid="login-form">Login Page Form</div>
+          )}
+        </div>
+      );
+    }
+
+    renderWithProviders(
+      <AppShell>
+        <LoginSimulationComponent />
+      </AppShell>
+    );
+
+    expect(screen.getByTestId('login-form')).toBeInTheDocument();
+
+    act(() => {
+      capturedLogin!({
+        access: 'new-valid-token',
+        refresh: '',
+        user: {
+          id: 1,
+          name: 'Alice Consultant',
+          email: 'consultant@engagementpulse.com',
+          role: 'consultant',
+          organisation: null,
+          organisations: [{ id: 1, name: 'Acme Corp', slug: 'acme' }],
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/');
+    });
   });
 
   test('renders dashboard shell and user profile for authenticated consultant', async () => {
@@ -226,6 +282,50 @@ describe('Protected Routes & Session Guard', () => {
     expect(logoutApiSpy).toHaveBeenCalledTimes(1);
     expect(clearQueryCacheSpy).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/login');
+  });
+
+  test('completes auth initialization and redirects / to /login when refresh returns 404 (FastAPI endpoint missing)', async () => {
+    (usePathname as jest.Mock).mockReturnValue('/');
+
+    // Simulate 404 Not Found from FastAPI
+    jest.spyOn(apiClient.auth, 'refreshToken').mockRejectedValue(
+      new (require('@/lib/api-client').ApiClientError)('Not Found', 404)
+    );
+
+    renderWithProviders(
+      <AppShell>
+        <div data-testid="protected-content">Confidential Project Dashboard</div>
+      </AppShell>
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+    });
+
+    expect(screen.queryByTestId('auth-loading-state')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument();
+  });
+
+  test('completes auth initialization and redirects / to /login when refresh encounters network error', async () => {
+    (usePathname as jest.Mock).mockReturnValue('/');
+
+    // Simulate network error
+    jest.spyOn(apiClient.auth, 'refreshToken').mockRejectedValue(
+      new (require('@/lib/api-client').ApiClientError)('Unable to connect to the server.', 0)
+    );
+
+    renderWithProviders(
+      <AppShell>
+        <div data-testid="protected-content">Confidential Project Dashboard</div>
+      </AppShell>
+    );
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/login');
+    });
+
+    expect(screen.queryByTestId('auth-loading-state')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument();
   });
 });
 

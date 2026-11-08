@@ -1,5 +1,6 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,13 @@ class ProjectResponse(BaseModel):
     name: str
     organisation_id: int
     risk_score: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @computed_field
+    @property
+    def organisation(self) -> int:
+        return self.organisation_id
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -67,6 +75,7 @@ def list_projects(
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
+@router.get("/{project_id}/", response_model=ProjectResponse, include_in_schema=False)
 def get_project(
     project_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -121,6 +130,7 @@ def create_project(
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
+@router.patch("/{project_id}/", response_model=ProjectResponse, include_in_schema=False)
 def update_project(
     project_id: int,
     payload: ProjectUpdateRequest,
