@@ -1,4 +1,7 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_env_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 
 
 class Settings(BaseSettings):
@@ -17,7 +20,7 @@ class Settings(BaseSettings):
     SEED_PASSWORD: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(_env_file_path, ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

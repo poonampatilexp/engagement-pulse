@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pulse_user} -d ${DB_NAME:-engagement_pulse}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-pulse_user} -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,22 +29,19 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  api:
     build:
-      context: ./backend
+      context: ./backend-fastapi
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      - DEBUG=True
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345}
-      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,backend,frontend
-      - DB_ENGINE=django.db.backends.postgresql
-      - DB_NAME=${DB_NAME:-engagement_pulse}
-      - DB_USER=${DB_USER:-pulse_user}
-      - DB_PASSWORD=${DB_PASSWORD:-pulse_password}
-      - DB_HOST=db
-      - DB_PORT=5432
+      - DATABASE_URL=postgresql+psycopg://${DB_USER:-pulse_user}:${DB_PASSWORD:-pulse_password}@db:5432/${FASTAPI_DB_NAME:-engagement_pulse_fastapi}
       - REDIS_URL=redis://redis:6379/0
+      - DRAMATIQ_QUEUE_NAME=fastapi
+      - CSV_UPLOAD_DIR=media/csv_imports
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-05abc812732db779a9ad1ff9b9019d7e87d91cad025a71e0094eea37b6b79dfe}
+      - SEED_CONSULTANT_PASSWORD=${SEED_CONSULTANT_PASSWORD:-ConsultantDevPass#2026}
+      - SEED_CLIENT_VIEWER_PASSWORD=${SEED_CLIENT_VIEWER_PASSWORD:-ViewerDevPass#2026}
     ports:
       - "8000:8000"
     volumes:
@@ -54,23 +51,29 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    networks:
+      default:
+        aliases:
+          - api
+          - backend
 
   worker:
     build:
-      context: ./backend
+      context: ./backend-fastapi
       dockerfile: Dockerfile
     command: ["worker"]
     restart: unless-stopped
     environment:
-      - DEBUG=True
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345}
-      - DB_ENGINE=django.db.backends.postgresql
-      - DB_NAME=${DB_NAME:-engagement_pulse}
-      - DB_USER=${DB_USER:-pulse_user}
-      - DB_PASSWORD=${DB_PASSWORD:-pulse_password}
-      - DB_HOST=db
-      - DB_PORT=5432
+      - DATABASE_URL=postgresql+psycopg://${DB_USER:-pulse_user}:${DB_PASSWORD:-pulse_password}@db:5432/${FASTAPI_DB_NAME:-engagement_pulse_fastapi}
       - REDIS_URL=redis://redis:6379/0
+      - DRAMATIQ_QUEUE_NAME=fastapi
+      - CSV_UPLOAD_DIR=media/csv_imports
     volumes:
       - media_data:/app/media
     depends_on:
@@ -78,8 +81,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      backend:
-        condition: service_started
+      api:
+        condition: service_healthy
 
   frontend:
     build:
@@ -99,8 +102,63 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      backend:
-        condition: service_started
+      api:
+        condition: service_healthy
+
+  # Optional Django service profile (preserved without modification)
+  django-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles:
+      - django
+    restart: unless-stopped
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345}
+      - ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,backend,frontend
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=engagement_pulse
+      - DB_USER=${DB_USER:-pulse_user}
+      - DB_PASSWORD=${DB_PASSWORD:-pulse_password}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  django-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["worker"]
+    profiles:
+      - django
+    restart: unless-stopped
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-engagement-pulse-dev-secret-key-change-in-prod-12345}
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=engagement_pulse
+      - DB_USER=${DB_USER:-pulse_user}
+      - DB_PASSWORD=${DB_PASSWORD:-pulse_password}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+    volumes:
+      - media_data:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
