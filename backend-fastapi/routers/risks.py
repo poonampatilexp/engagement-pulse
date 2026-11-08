@@ -8,6 +8,7 @@ from database import get_db
 from dependencies import get_current_user
 import models
 from permissions import can_access_organisation, can_edit_organisation
+from scoring_service import ScoringConfigurationError, recalculate_project_score
 
 router = APIRouter(tags=["risks"])
 
@@ -85,9 +86,11 @@ def create_project_risk(
     - Returns HTTP 404 if project does not exist or is in an inaccessible organisation.
     - Returns HTTP 403 if user cannot edit in the organisation (e.g. client viewer).
     - Cannot move or reassign the project_id.
+    - Locks the project row (SELECT FOR UPDATE) to serialize concurrent updates.
+    - Recalculates project risk score and commits in the same transaction.
     """
     project = db.execute(
-        select(models.Project).where(models.Project.id == project_id)
+        select(models.Project).where(models.Project.id == project_id).with_for_update()
     ).scalar_one_or_none()
 
     if not project or not can_access_organisation(current_user, project.organisation_id, db=db):
@@ -111,6 +114,17 @@ def create_project_risk(
         owner=payload.owner.strip() if payload.owner is not None else None,
     )
     db.add(risk)
+    db.flush()
+
+    try:
+        recalculate_project_score(db, project.id)
+    except ScoringConfigurationError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Scoring configuration error: {e}",
+        )
+
     db.commit()
     db.refresh(risk)
     return risk
@@ -128,6 +142,8 @@ def update_risk(
     - Returns HTTP 404 if risk does not exist or user cannot access its project's organisation.
     - Returns HTTP 403 if user is not authorized to edit (e.g. client viewer).
     - Moving a risk to another project is not allowed.
+    - Locks the project row (SELECT FOR UPDATE) to serialize concurrent updates.
+    - Recalculates project risk score if severity or status changes and commits in the same transaction.
     """
     risk = db.execute(
         select(models.Risk).where(models.Risk.id == risk_id)
@@ -140,7 +156,7 @@ def update_risk(
         )
 
     project = db.execute(
-        select(models.Project).where(models.Project.id == risk.project_id)
+        select(models.Project).where(models.Project.id == risk.project_id).with_for_update()
     ).scalar_one_or_none()
 
     if not project or not can_access_organisation(current_user, project.organisation_id, db=db):
@@ -155,8 +171,20 @@ def update_risk(
             detail="Forbidden: Not authorized to edit risks in this organisation",
         )
 
-    for field, value in payload.model_dump(mode="json", exclude_unset=True).items():
+    updated_fields = payload.model_dump(mode="json", exclude_unset=True)
+    for field, value in updated_fields.items():
         setattr(risk, field, value.strip() if isinstance(value, str) else value)
+
+    if "severity" in updated_fields or "status" in updated_fields:
+        db.flush()
+        try:
+            recalculate_project_score(db, project.id)
+        except ScoringConfigurationError as e:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Scoring configuration error: {e}",
+            )
 
     db.commit()
     db.refresh(risk)
