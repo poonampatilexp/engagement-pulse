@@ -11,7 +11,11 @@ class WebSocketTicketService:
     @classmethod
     def _get_redis(cls):
         redis_url = getattr(settings, 'REDIS_URL', 'redis://127.0.0.1:6379/0')
-        return redis.Redis.from_url(redis_url)
+        return redis.Redis.from_url(
+            redis_url,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
 
     @classmethod
     def create_ticket(cls, user: User) -> str:

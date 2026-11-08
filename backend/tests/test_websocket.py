@@ -138,6 +138,32 @@ class TestWebSocketConnection:
         response = api_client.post('/api/auth/ws-ticket/')
         assert response.status_code == 401
 
+    def test_idle_websocket_does_not_timeout_on_async_redis_operation(self, seeded_data):
+        """
+        Verifies that an idle WebSocket connection does not crash or disconnect
+        due to async Redis read timeouts (e.g. redis-py 8.x default 5s socket_timeout).
+        """
+        viewer = seeded_data['viewer_acme']
+        org_acme = seeded_data['org_acme']
+
+        ticket = WebSocketTicketService.create_ticket(viewer)
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/organisations/{org_acme.id}/updates/?ticket={ticket}"
+        )
+
+        async def _test():
+            connected, _ = await communicator.connect()
+            assert connected is True
+            try:
+                # Wait 6 seconds (longer than default 5s redis socket_timeout)
+                received_nothing = await communicator.receive_nothing(timeout=6.0)
+                assert received_nothing is True
+            finally:
+                await communicator.disconnect()
+
+        async_to_sync(_test)()
+
 
 @pytest.mark.django_db(transaction=True)
 class TestLiveDashboardUpdates:
