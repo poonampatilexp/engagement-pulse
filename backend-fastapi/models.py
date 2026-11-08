@@ -1,14 +1,17 @@
 from datetime import datetime
 import enum
+import uuid
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
+    Uuid,
     func,
     text,
 )
@@ -33,6 +36,13 @@ class RiskStatus(str, enum.Enum):
     OPEN = "open"
     MITIGATING = "mitigating"
     CLOSED = "closed"
+
+
+class JobStatus(str, enum.Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class Organisation(Base):
@@ -137,6 +147,11 @@ class User(Base):
         secondary="consultant_organisation_access",
         back_populates="consultants",
     )
+    csv_jobs: Mapped[list["CSVImportJob"]] = relationship(
+        "CSVImportJob",
+        back_populates="created_by",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email='{self.email}' role='{self.role}'>"
@@ -183,6 +198,11 @@ class Project(Base):
     )
     risks: Mapped[list["Risk"]] = relationship(
         "Risk",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )
+    csv_jobs: Mapped[list["CSVImportJob"]] = relationship(
+        "CSVImportJob",
         back_populates="project",
         cascade="all, delete-orphan",
     )
@@ -287,4 +307,76 @@ class StatusWeight(Base):
 
     def __repr__(self) -> str:
         return f"<StatusWeight id={self.id} status='{self.status}' weight={self.weight}>"
+
+
+class CSVImportJob(Base):
+    __tablename__ = "csv_import_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'processing', 'completed', 'failed')",
+            name="check_csv_job_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    project_id: Mapped[int] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default=JobStatus.QUEUED.value,
+        server_default=text("'queued'"),
+        nullable=False,
+        index=True,
+    )
+    total_rows: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
+    processed_rows: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default=text("0"),
+        nullable=False,
+    )
+    error_details: Mapped[dict] = mapped_column(
+        JSON,
+        default=dict,
+        server_default=text("'{}'::json"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    # Relationships
+    project: Mapped["Project"] = relationship("Project", back_populates="csv_jobs")
+    created_by: Mapped["User"] = relationship("User", back_populates="csv_jobs")
+
+    def __repr__(self) -> str:
+        return f"<CSVImportJob id={self.id} status='{self.status}' filename='{self.filename}'>"
 

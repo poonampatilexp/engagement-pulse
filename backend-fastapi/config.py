@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    REDIS_URL: str = "redis://127.0.0.1:6379/0"
+    DRAMATIQ_QUEUE_NAME: str = "fastapi"
+    CSV_UPLOAD_DIR: str = "media/csv_imports"
 
     # Development-only seed credentials (read from environment/.env, never hardcoded)
     SEED_CONSULTANT_PASSWORD: str | None = None

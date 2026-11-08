@@ -10,6 +10,7 @@ from routers.auth import router as auth_router
 from routers.organisations import router as organisations_router
 from routers.projects import router as projects_router
 from routers.risks import router as risks_router
+from routers.csv_jobs import router as csv_jobs_router
 
 app = FastAPI(
     title="Engagement Pulse API",
@@ -37,11 +38,13 @@ app.include_router(auth_router)
 app.include_router(organisations_router)
 app.include_router(projects_router)
 app.include_router(risks_router)
+app.include_router(csv_jobs_router)
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(organisations_router, prefix="/api")
 app.include_router(projects_router, prefix="/api")
 app.include_router(risks_router, prefix="/api")
+app.include_router(csv_jobs_router, prefix="/api")
 
 
 @app.get("/health")
