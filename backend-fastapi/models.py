@@ -12,7 +12,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 
 from database import Base
 
@@ -235,3 +235,56 @@ class Risk(Base):
 
     def __repr__(self) -> str:
         return f"<Risk id={self.id} title='{self.title}' severity='{self.severity}' status='{self.status}'>"
+
+
+class SeverityWeight(Base):
+    __tablename__ = "severity_weights"
+    __table_args__ = (
+        UniqueConstraint("severity", name="uq_severity_weights_severity"),
+        CheckConstraint(
+            "severity IN ('low', 'medium', 'high', 'critical')",
+            name="check_severity_weight_valid",
+        ),
+        CheckConstraint(
+            "weight > 0",
+            name="check_severity_weight_positive",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    weight: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Synonyms for flexible key/name property access
+    key = synonym("severity")
+    name = synonym("severity")
+
+    def __repr__(self) -> str:
+        return f"<SeverityWeight id={self.id} severity='{self.severity}' weight={self.weight}>"
+
+
+class StatusWeight(Base):
+    __tablename__ = "status_weights"
+    __table_args__ = (
+        UniqueConstraint("status", name="uq_status_weights_status"),
+        CheckConstraint(
+            "status IN ('open', 'mitigating', 'closed')",
+            name="check_status_weight_valid",
+        ),
+        CheckConstraint(
+            "weight >= 0",
+            name="check_status_weight_nonnegative",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    weight: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Synonyms for flexible key/name property access
+    key = synonym("status")
+    name = synonym("status")
+
+    def __repr__(self) -> str:
+        return f"<StatusWeight id={self.id} status='{self.status}' weight={self.weight}>"
+
