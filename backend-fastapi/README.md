@@ -40,9 +40,10 @@ Copy the example environment file:
 cp .env.example .env
 ```
 
-Default PostgreSQL connection string:
+Default environment variables:
 ```env
 DATABASE_URL=postgresql+psycopg://pulse_user:pulse_password@localhost:5432/engagement_pulse_fastapi
+JWT_SECRET_KEY=change-this-in-production-to-a-secure-random-secret-key-at-least-32-chars
 ```
 
 ### 5. Database Migrations (Alembic)
