@@ -104,5 +104,8 @@ python main.py
 - **Project Detail:** `GET http://127.0.0.1:8000/projects/{project_id}` (requires `Authorization: Bearer <token>`)
 - **Create Project:** `POST http://127.0.0.1:8000/projects` (consultant only; requires `name`, `organisation_id`)
 - **Update Project:** `PATCH http://127.0.0.1:8000/projects/{project_id}` (consultant only; update `name`)
+- **Project Risks List:** `GET http://127.0.0.1:8000/projects/{project_id}/risks` (requires `Authorization: Bearer <token>`)
+- **Create Risk:** `POST http://127.0.0.1:8000/projects/{project_id}/risks` (consultant only; requires `title`, optional `description`, `severity`, `status`, `owner`)
+- **Update Risk:** `PATCH http://127.0.0.1:8000/risks/{risk_id}` (consultant only; update `title`, `description`, `severity`, `status`, `owner`)
 - **Interactive Swagger Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
