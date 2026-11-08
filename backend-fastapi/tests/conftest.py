@@ -6,9 +6,17 @@ from fastapi.testclient import TestClient
 # Ensure backend-fastapi directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Set dedicated non-production JWT_SECRET_KEY for test runs if not present in environment
+if not os.getenv("JWT_SECRET_KEY"):
+    os.environ["JWT_SECRET_KEY"] = "ci-test-jwt-secret-key-do-not-use-in-production-32chars"
+
+from config import settings
+
+if not settings.JWT_SECRET_KEY:
+    settings.JWT_SECRET_KEY = "ci-test-jwt-secret-key-do-not-use-in-production-32chars"
+
 from main import app
 from database import SessionLocal
-from config import settings
 
 
 @pytest.fixture(scope="session")
