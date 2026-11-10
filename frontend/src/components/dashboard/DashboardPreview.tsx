@@ -89,12 +89,18 @@ export default function DashboardPreview() {
   });
 
   // 2. Fetch risks for each project concurrently
+  const riskQueryConfigs = useMemo(
+    () =>
+      projects.map((p) => ({
+        queryKey: ['risks', p.id] as const,
+        queryFn: () => apiClient.risks.list(p.id),
+        enabled: !!p.id,
+      })),
+    [projects]
+  );
+
   const riskQueries = useQueries({
-    queries: projects.map((p) => ({
-      queryKey: ['risks', p.id],
-      queryFn: () => apiClient.risks.list(p.id),
-      enabled: !!p.id,
-    })),
+    queries: riskQueryConfigs,
   });
 
   const isLoadingRisks = riskQueries.some((q) => q.isLoading);
@@ -130,8 +136,24 @@ export default function DashboardPreview() {
 
   // State for Risk Details Drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerTitle, setDrawerTitle] = useState('');
-  const [drawerRisks, setDrawerRisks] = useState<(Risk & { projectName?: string })[]>([]);
+  const [drawerProjectId, setDrawerProjectId] = useState<number | null>(null);
+
+  // Derive drawer title and displayed risks directly from state and query cache without useEffect
+  const drawerProject = drawerProjectId != null ? projects.find((p) => p.id === drawerProjectId) : null;
+  const drawerTitle = drawerProject
+    ? `Open Risks — ${drawerProject.name}`
+    : `Open Risks — ${selectedOrganisation?.name || 'Active Organisation'}`;
+
+  const drawerRisks = useMemo(() => {
+    if (drawerProjectId != null) {
+      const risks = projectRisksMap.get(drawerProjectId) || [];
+      const projectName = projects.find((p) => p.id === drawerProjectId)?.name;
+      return risks
+        .filter((r) => r.status !== 'closed')
+        .map((r) => ({ ...r, projectName }));
+    }
+    return allOpenRisks;
+  }, [drawerProjectId, projectRisksMap, projects, allOpenRisks]);
 
   // State for Edit Risk Dialog (Consultants only)
   const [editingRisk, setEditingRisk] = useState<Risk | null>(null);
@@ -159,6 +181,7 @@ export default function DashboardPreview() {
     onSuccess: (updatedRisk) => {
       // Invalidate relevant queries so risk score and risk list recalculate
       queryClient.invalidateQueries({ queryKey: ['risks', updatedRisk.project] });
+      queryClient.invalidateQueries({ queryKey: ['risks'] });
       queryClient.invalidateQueries({ queryKey: ['projects', orgId] });
       setEditingRisk(null);
       setEditError(null);
@@ -170,18 +193,13 @@ export default function DashboardPreview() {
 
   // Handle clicking "Open Risks" summary card -> show all non-closed risks for active organisation
   const handleOpenAllRisks = () => {
-    setDrawerTitle(`Open Risks — ${selectedOrganisation?.name || 'Active Organisation'}`);
-    setDrawerRisks(allOpenRisks);
+    setDrawerProjectId(null);
     setDrawerOpen(true);
   };
 
   // Handle clicking a specific project's Open Risks Count -> show that project's non-closed risks
   const handleOpenProjectRisks = (project: Project) => {
-    const risks = (projectRisksMap.get(project.id) || [])
-      .filter((r) => r.status !== 'closed')
-      .map((r) => ({ ...r, projectName: project.name }));
-    setDrawerTitle(`Open Risks — ${project.name}`);
-    setDrawerRisks(risks);
+    setDrawerProjectId(project.id);
     setDrawerOpen(true);
   };
 
@@ -203,22 +221,6 @@ export default function DashboardPreview() {
     if (!editingRisk) return;
     updateRiskMutation.mutate({ riskId: editingRisk.id, data: editFormData });
   };
-
-  // Keep drawer risks updated when queries change
-  React.useEffect(() => {
-    if (drawerOpen) {
-      // If drawer title contains project name, find that project
-      const matchedProject = projects.find((p) => drawerTitle.includes(p.name));
-      if (matchedProject) {
-        const risks = (projectRisksMap.get(matchedProject.id) || [])
-          .filter((r) => r.status !== 'closed')
-          .map((r) => ({ ...r, projectName: matchedProject.name }));
-        setDrawerRisks(risks);
-      } else {
-        setDrawerRisks(allOpenRisks);
-      }
-    }
-  }, [allOpenRisks, projectRisksMap, drawerOpen, projects, drawerTitle]);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>

@@ -76,9 +76,11 @@ export default function CSVImportDialog({ open, onClose, project }: CSVImportDia
 
   // Preserve active job tracking per project; only clear when switching to a different project
   const prevProjectIdRef = useRef(project?.id);
+  const completedJobRef = useRef<string | null>(null);
   useEffect(() => {
     if (project?.id !== prevProjectIdRef.current) {
       prevProjectIdRef.current = project?.id;
+      completedJobRef.current = null;
       setSelectedFile(null);
       setActiveJobId(null);
       setClientError(null);
@@ -120,12 +122,14 @@ export default function CSVImportDialog({ open, onClose, project }: CSVImportDia
 
   // When job completes, refresh relevant project and risk data without full page reload
   useEffect(() => {
-    if (job?.status === 'completed' && project) {
+    const currentJobId = job?.id || job?.job_id;
+    if (job?.status === 'completed' && project && currentJobId && completedJobRef.current !== currentJobId) {
+      completedJobRef.current = currentJobId;
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['risks', project.id] });
       queryClient.invalidateQueries({ queryKey: ['risks'] });
     }
-  }, [job?.status, project, queryClient]);
+  }, [job?.status, job?.id, job?.job_id, project, queryClient]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
